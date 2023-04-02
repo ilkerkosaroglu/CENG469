@@ -210,6 +210,90 @@ bool ParseObj(const string& fileName)
 	return true;
 }
 
+class Surface
+{
+	public:
+	float x, y; // starting point of the surface
+	float cp[4][4]; // control point heights
+};
+
+// use this function instead of parseObj
+bool createSurfaces(int w, int h){
+	GLfloat x = 0;
+	gVertices.push_back(Vertex(x, x, x));
+}
+
+void initVBOForSurfaces()
+{
+	GLuint vao;
+	glGenVertexArrays(1, &vao);
+	assert(vao > 0);
+	glBindVertexArray(vao);
+	cout << "vao = " << vao << endl;
+
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	assert(glGetError() == GL_NONE);
+
+	glGenBuffers(1, &gVertexAttribBuffer);
+	glGenBuffers(1, &gIndexBuffer);
+
+	assert(gVertexAttribBuffer > 0 && gIndexBuffer > 0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, gVertexAttribBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gIndexBuffer);
+
+	gVertexDataSizeInBytes = gVertices.size() * 3 * sizeof(GLfloat);
+	int indexDataSizeInBytes = gFaces.size() * 3 * sizeof(GLuint);
+	GLfloat *vertexData = new GLfloat[gVertices.size() * 3];
+	GLuint *indexData = new GLuint[gFaces.size() * 3];
+
+	float minX = 1e6, maxX = -1e6;
+	float minY = 1e6, maxY = -1e6;
+	float minZ = 1e6, maxZ = -1e6;
+
+	for (int i = 0; i < gVertices.size(); ++i)
+	{
+		vertexData[3 * i] = gVertices[i].x;
+		vertexData[3 * i + 1] = gVertices[i].y;
+		vertexData[3 * i + 2] = gVertices[i].z;
+
+		minX = std::min(minX, gVertices[i].x);
+		maxX = std::max(maxX, gVertices[i].x);
+		minY = std::min(minY, gVertices[i].y);
+		maxY = std::max(maxY, gVertices[i].y);
+		minZ = std::min(minZ, gVertices[i].z);
+		maxZ = std::max(maxZ, gVertices[i].z);
+	}
+
+	std::cout << "minX = " << minX << std::endl;
+	std::cout << "maxX = " << maxX << std::endl;
+	std::cout << "minY = " << minY << std::endl;
+	std::cout << "maxY = " << maxY << std::endl;
+	std::cout << "minZ = " << minZ << std::endl;
+	std::cout << "maxZ = " << maxZ << std::endl;
+
+	for (int i = 0; i < gFaces.size(); ++i)
+	{
+		indexData[3 * i] = gFaces[i].vIndex[0];
+		indexData[3 * i + 1] = gFaces[i].vIndex[1];
+		indexData[3 * i + 2] = gFaces[i].vIndex[2];
+	}
+
+	// glBufferData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes, 0, GL_STATIC_DRAW);
+	// glBufferSubData(GL_ARRAY_BUFFER, 0, gVertexDataSizeInBytes, vertexData);
+	glBufferData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes, vertexData, GL_STATIC_DRAW);
+
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexDataSizeInBytes, indexData, GL_STATIC_DRAW);
+
+	// done copying; can free now
+	delete[] vertexData;
+	delete[] indexData;
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(gVertexDataSizeInBytes));
+}
+
 bool ReadDataFromFile(
 	const string& fileName, ///< [in]  Name of the shader file
 	string& data)     ///< [out] The contents of the file
@@ -430,12 +514,26 @@ void initVBO()
 
 void init()
 {
-	ParseObj("armadillo.obj");
-	//ParseObj("bunny.obj");
+	// ParseObj("armadillo.obj");
+	ParseObj("bunny.obj");
 
 	glEnable(GL_DEPTH_TEST);
 	initShaders();
 	initVBO();
+}
+
+vector<Surface> gSurfaces;
+int sampleCount = 10;
+
+void drawSurface(int surfaceIndex)
+{
+	glBindBuffer(GL_ARRAY_BUFFER, gVertexAttribBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gIndexBuffer);
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(gVertexDataSizeInBytes));
+
+	glDrawElements(GL_TRIANGLES, sampleCount*sampleCount*6, GL_UNSIGNED_INT, 0);
 }
 
 void drawModel()
@@ -510,6 +608,7 @@ void reshape(GLFWwindow* window, int w, int h)
 	//glLoadIdentity();
 }
 
+int polygonMode = GL_FILL;
 void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	if (key == GLFW_KEY_Q && action == GLFW_PRESS)
@@ -529,6 +628,14 @@ void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 	else if (key == GLFW_KEY_F && action == GLFW_PRESS)
 	{
 		//glShadeModel(GL_FLAT);
+	}
+	else if (key == GLFW_KEY_V && action == GLFW_PRESS)
+	{
+		if(polygonMode == GL_FILL)
+			polygonMode = GL_LINE;
+		else
+			polygonMode = GL_FILL;
+		glPolygonMode(GL_FRONT_AND_BACK, polygonMode);
 	}
 }
 

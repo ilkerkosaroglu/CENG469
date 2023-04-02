@@ -1,0 +1,6 @@
+Deferred shading - G buffer - Multiple Passes
+instead: https://learnopengl.com/Lighting/Multiple-lights
+
+decided to use https://subscription.packtpub.com/book/game-development/9781849695046/1/ch01lvl1sec13/dynamically-subdividing-a-plane-using-the-geometry-shader
+
+bernstein shader: https://www.shadertoy.com/view/lsKXDK
