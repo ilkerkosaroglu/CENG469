@@ -276,8 +276,9 @@ void ParseObj(const string &fileName)
 
 	// parse lights
 	for(int i=0; i<numLights; i++){
-		gLightPos[i] = glm::vec3(stof(data[lightsStart + i * 6]), stof(data[lightsStart + i * 6 + 1]), stof(data[lightsStart + i * 6 + 2]));
-		gLightI[i] = glm::vec3(stof(data[lightsStart + i * 6 + 3]), stof(data[lightsStart + i * 6 + 4]), stof(data[lightsStart + i * 6 + 5]));
+		int index = lightsStart + i * 6;
+		gLightPos[i] = glm::vec3(stof(data[index]), stof(data[index + 1]), stof(data[index + 2]));
+		gLightI[i] = glm::vec3(stof(data[index + 3]), stof(data[index + 4]), stof(data[index + 5]));
 	}
 
 	for(int i=numLights; i<5; i++){
@@ -545,6 +546,16 @@ void debugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsiz
 	printf("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s",
 		(type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
 		type, severity, message);
+	cout << "GL_DEBUG_TYPE_ERROR:" << (GL_DEBUG_TYPE_ERROR & type) << std::endl;
+	cout << "GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:" << (GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR & type) << std::endl;
+	cout << "GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:" << (GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR & type) << std::endl;
+	cout << "GL_DEBUG_TYPE_PORTABILITY:" << (GL_DEBUG_TYPE_PORTABILITY & type) << std::endl;
+	cout << "GL_DEBUG_TYPE_PERFORMANCE:" << (GL_DEBUG_TYPE_PERFORMANCE & type) << std::endl;
+	cout << "GL_DEBUG_TYPE_MARKER:" << (GL_DEBUG_TYPE_MARKER & type) << std::endl;
+	cout << "GL_DEBUG_TYPE_PUSH_GROUP:" << (GL_DEBUG_TYPE_PUSH_GROUP & type) << std::endl;
+	cout << "GL_DEBUG_TYPE_POP_GROUP:" << (GL_DEBUG_TYPE_POP_GROUP & type) << std::endl;
+	cout << "GL_DEBUG_TYPE_OTHER:" << (GL_DEBUG_TYPE_OTHER & type) << std::endl;
+	cout << "GL_DONT_CARE:" << (GL_DONT_CARE & type) << std::endl;
 }
 int main(int argc, char** argv)   // Create Main Function For Bringing It All Together
 {

@@ -6,12 +6,10 @@
 // However, we will not change them and therefore we define them 
 // here for simplicity.
 
-vec3 I = vec3(1, 1, 1);          // point light intensity
 vec3 Iamb = vec3(0.8, 0.8, 0.8); // ambient light intensity
-vec3 kd = vec3(1, 0.2, 0.2);     // diffuse reflectance coefficient
 vec3 ka = vec3(0.3, 0.3, 0.3);   // ambient reflectance coefficient
+vec3 kd = vec3(0.8, 0.8, 0.8);   // diffuse reflectance coefficient
 vec3 ks = vec3(0.8, 0.8, 0.8);   // specular reflectance coefficient
-vec3 lightPos = vec3(5, 5, 5);   // light position in world coordinates
 
 struct Light
 {
@@ -19,7 +17,9 @@ struct Light
 	vec3 intensity;
 };
 
-uniform Light light[5];
+const int MAX_LIGHTS = 5;
+
+uniform Light light[MAX_LIGHTS];
 
 uniform vec3 eyePos;
 
@@ -30,22 +30,29 @@ out vec4 fragColor;
 
 void main(void)
 {
-	// Compute lighting. We assume lightPos and eyePos are in world
-	// coordinates. fragWorldPos and fragWorldNor are the interpolated
-	// coordinates by the rasterizer.
+	int i=0;
+	vec3 col = vec3(0,0,0);
+	for(; i < MAX_LIGHTS; i++){
+		// Compute lighting. We assume lightPos and eyePos are in world
+		// coordinates. fragWorldPos and fragWorldNor are the interpolated
+		// coordinates by the rasterizer.
+		vec3 lightPos = light[i].position;
+		vec3 I = light[i].intensity;
 
-	vec3 L = normalize(lightPos - vec3(fragWorldPos));
-	vec3 V = normalize(eyePos - vec3(fragWorldPos));
-	vec3 H = normalize(L + V);
-	vec3 N = normalize(fragWorldNor);
+		vec3 L = normalize(lightPos - vec3(fragWorldPos));
+		vec3 V = normalize(eyePos - vec3(fragWorldPos));
+		vec3 H = normalize(L + V);
+		vec3 N = normalize(fragWorldNor);
 
-	float NdotL = dot(N, L); // for diffuse component
-	float NdotH = dot(N, H); // for specular component
+		float NdotL = dot(N, L); // for diffuse component
+		float NdotH = dot(N, H); // for specular component
 
-	vec3 diffuseColor = I * kd * max(0, NdotL);
-	vec3 specularColor = I * ks * pow(max(0, NdotH), 100);
+		vec3 diffuseColor = I * kd * max(0, NdotL);
+		vec3 specularColor = I * ks * pow(max(0, NdotH), 100);
+		
+
+		col += diffuseColor + specularColor;
+	}
 	vec3 ambientColor = Iamb * ka;
-
-	fragColor = vec4(diffuseColor + specularColor + ambientColor, 1);
-	fragColor = vec4(1,1,1, 1);
+	fragColor = vec4(col+ambientColor, 1);
 }
