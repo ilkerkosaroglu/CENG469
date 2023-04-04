@@ -12,8 +12,6 @@ layout(location=1) in vec3 inNormal;
 out vec4 fragWorldPos;
 out vec3 fragWorldNor;
 
-out vec4 dbg;
-
 void main(void)
 {
 	// Determine the indices of the vertex in the 6x6 grid
@@ -57,7 +55,6 @@ void main(void)
 	fragWorldNor = inverse(transpose(mat3x3(modelingMatrix))) * vec3(0, 0, 1);
 
 	gl_Position = projectionMatrix * viewingMatrix * modelingMatrix * vec4(vertexP, 1);
-	dbg = projectionMatrix * viewingMatrix * modelingMatrix * vec4(vertexP, 1);
 
 	// int stt=0;
 	// // int stt=sampleSize*sampleSize*6-3;
