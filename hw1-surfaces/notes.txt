@@ -26,3 +26,6 @@ confirmed that gl_vertexID can reach sample*sample*6-1
 
 used varying dbg to print output to screen using a basic triangle and its color.
 
+
+don't forget to close debug context, and check renderer on lab computers.
+

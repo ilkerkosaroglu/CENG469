@@ -17,6 +17,7 @@ void main(void)
 	// Determine the indices of the vertex in the 6x6 grid
 	int sampleSize = int(xyss.z);
 	float sizePerSurface = xyss.w;
+	float totalSamples = float(sampleSize * sampleSize);
 
 	float singleOffset = sizePerSurface / float(sampleSize);
 
@@ -44,7 +45,7 @@ void main(void)
 	vertexPosition.x += -0.5 + xyss.x * sizePerSurface;
 	vertexPosition.y += -0.5 + xyss.y * sizePerSurface;
 
-	vec3 vertexP = vec3(vertexPosition, 0);
+	vec3 vertexP = vec3(vertexPosition, (gl_VertexID/6)/totalSamples);
 
 	// Compute the world coordinates of the vertex and its normal.
 	// These coordinates will be interpolated during the rasterization

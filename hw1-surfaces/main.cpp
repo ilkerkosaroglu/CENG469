@@ -36,6 +36,8 @@ public:
 vector<Surface> gSurfaces;
 int sampleCount = 10;
 
+float curRotation = -30;
+
 GLuint gProgram;
 int gWidth, gHeight;
 
@@ -255,7 +257,7 @@ bool ReadDataFromFile(
 void setSampleSize(int size)
 {
 	// loop each surface
-	for(auto k: gSurfaces){
+	for(auto &k: gSurfaces){
 		k.xyss.z = size*1.0f;
 	}
 }
@@ -399,11 +401,14 @@ void initShaders()
 	}
 }
 
+int polygonMode = GL_LINE;
 void init()
 {
 	createSurfaces();
 
 	glEnable(GL_DEPTH_TEST);
+	glPolygonMode(GL_FRONT_AND_BACK, polygonMode);
+
 	initShaders();
 	initVBOForSurfaces();
 }
@@ -447,11 +452,11 @@ void display()
 
 	// Compute the modeling matrix
 	glm::mat4 matT = glm::translate(glm::mat4(1.0), glm::vec3(-0.1f, -0.2f, -7.0f));
-	glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (0. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
+	glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (curRotation / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
 	glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-180. / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
 	glm::mat4 matRz = glm::rotate<float>(glm::mat4(1.0), angleRad, glm::vec3(0.0, 0.0, 1.0));
-	modelingMatrix = matT * matRz * matRy * matRx;
-	modelingMatrix = glm::mat4(1.0);
+	modelingMatrix = matRz * matRx;
+	// modelingMatrix = glm::mat4(1.0);
 	// Set the active program and the values of its uniform variables
 	glUseProgram(gProgram);
 	viewingMatrix = glm::lookAt(eyePos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
@@ -500,28 +505,45 @@ void reshape(GLFWwindow* window, int w, int h)
 	//glLoadIdentity();
 }
 
-int polygonMode = GL_LINE;
+const bool ALLOW_REPEAT = true;
+float getActionMultiplier()
+{
+	if(ALLOW_REPEAT){
+		return 0.2;
+	}
+	return 1;
+}
+bool getActionState(int action)
+{
+	return action == GLFW_PRESS || (action == GLFW_REPEAT && ALLOW_REPEAT);
+}
 void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-	if (key == GLFW_KEY_Q && action == GLFW_PRESS)
+	if (key == GLFW_KEY_Q && getActionState(action))
 	{
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 	}
-	else if (key == GLFW_KEY_G && action == GLFW_PRESS)
+	else if (key == GLFW_KEY_R && getActionState(action))
 	{
-		//glShadeModel(GL_SMOOTH);
-
+		curRotation += 10 * getActionMultiplier();
 	}
-	else if (key == GLFW_KEY_P && action == GLFW_PRESS)
+	else if (key == GLFW_KEY_F && getActionState(action))
 	{
-		//glShadeModel(GL_SMOOTH);
-
+		curRotation -= 10 * getActionMultiplier();
 	}
-	else if (key == GLFW_KEY_F && action == GLFW_PRESS)
+	else if (key == GLFW_KEY_W && getActionState(action))
 	{
-		//glShadeModel(GL_FLAT);
+		sampleCount += 2;
+		sampleCount = min(sampleCount, 80);
+		setSampleSize(sampleCount);
 	}
-	else if (key == GLFW_KEY_V && action == GLFW_PRESS)
+	else if (key == GLFW_KEY_S && getActionState(action))
+	{
+		sampleCount -= 2;
+		sampleCount = max(sampleCount, 2);
+		setSampleSize(sampleCount);
+	}
+	else if (key == GLFW_KEY_V && getActionState(action))
 	{
 		if(polygonMode == GL_FILL)
 			polygonMode = GL_LINE;
@@ -574,8 +596,8 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
 	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
-	int width = 640, height = 480;
-	window = glfwCreateWindow(width, height, "Simple Example", NULL, NULL);
+	int width = 800, height = 600;
+	window = glfwCreateWindow(width, height, "CENG 469 - HW1 - 2022-2023", NULL, NULL);
 
 	if (!window)
 	{
@@ -593,11 +615,11 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 		return EXIT_FAILURE;
 	}
 
-	char rendererInfo[512] = { 0 };
-	strcpy(rendererInfo, (const char*)glGetString(GL_RENDERER));
-	strcat(rendererInfo, " - ");
-	strcat(rendererInfo, (const char*)glGetString(GL_VERSION));
-	glfwSetWindowTitle(window, rendererInfo);
+	// char rendererInfo[512] = { 0 };
+	// strcpy(rendererInfo, (const char*)glGetString(GL_RENDERER));
+	// strcat(rendererInfo, " - ");
+	// strcat(rendererInfo, (const char*)glGetString(GL_VERSION));
+	// glfwSetWindowTitle(window, rendererInfo);
 
 	if(argc > 1)
 		ParseObj(argv[1]);
