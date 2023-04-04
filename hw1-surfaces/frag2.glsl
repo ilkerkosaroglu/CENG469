@@ -28,6 +28,7 @@ in vec3 fragWorldNor;
 
 out vec4 fragColor;
 
+in vec3 dbg;
 void main(void)
 {
 	int i=0;

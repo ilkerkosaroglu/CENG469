@@ -254,11 +254,12 @@ bool ReadDataFromFile(
 }
 
 
-void setSampleSize(int size)
+void setSampleSize(int newSampleSize)
 {
+	dbg(newSampleSize);
 	// loop each surface
 	for(auto &k: gSurfaces){
-		k.xyss.z = size*1.0f;
+		k.xyss.z = newSampleSize * 1.0f;
 	}
 }
 
@@ -295,13 +296,21 @@ void ParseObj(const string &fileName)
 	for(int y=0; y<height/4;y++){
 		for(int x=0;x<width/4;x++){
 			int surfaceIndex = y*(width/4) + x;
-			gSurfaces[surfaceIndex].xyss = glm::vec4(x * 1.0f, y * 1.0f, sampleCount*1.0f, sizePerSurface);
+			gSurfaces[surfaceIndex].xyss = glm::vec4(x * 1.0f, ((height/4)-y-1) * 1.0f, sampleCount*1.0f, sizePerSurface);
 			// loop surface data
-			for(int i=y*4; i<4; i++){
-				for(int j=x*4; j<4; j++){
-					int index = start + i*width + j;
+			dbg("");
+			dbg(x);
+			dbg(y);
+			for(int i=0; i<4; i++){
+				for(int j=0; j<4; j++){
+					dbg(i);
+					dbg(j);
+					int index = start + (y*4+i)*width + x*4 + j;
+					dbg(index);
+					dbg(stof(data[index]));
 					gSurfaces[surfaceIndex].cp[i][j] = stof(data[index]);
 				}
+				dbg("");
 			}
 		}
 	}
@@ -455,7 +464,7 @@ void display()
 	glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (curRotation / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
 	glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-180. / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
 	glm::mat4 matRz = glm::rotate<float>(glm::mat4(1.0), angleRad, glm::vec3(0.0, 0.0, 1.0));
-	modelingMatrix = matRz * matRx;
+	modelingMatrix = matRx;
 	// modelingMatrix = glm::mat4(1.0);
 	// Set the active program and the values of its uniform variables
 	glUseProgram(gProgram);

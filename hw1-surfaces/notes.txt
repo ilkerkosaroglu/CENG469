@@ -29,3 +29,5 @@ used varying dbg to print output to screen using a basic triangle and its color.
 
 don't forget to close debug context, and check renderer on lab computers.
 
+ordering the rectangles and their offsets was a bit hard.
+
