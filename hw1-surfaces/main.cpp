@@ -103,10 +103,15 @@ int gVertexDataSizeInBytes, gNormalDataSizeInBytes;
 // use this function instead of parseObj
 void createSurfaces(){
 	GLfloat x = 0;
+	for (int i = 0; i < MAX_SAMPLES * MAX_SAMPLES*6; i++)
 	gVertices.push_back(Vertex(x, x, x));
-	int v[3] = {0, 0, 0};
-	for (int i = 0; i < MAX_SAMPLES * MAX_SAMPLES * 2; i++)
+	for (int i = 0; i < MAX_SAMPLES * MAX_SAMPLES; i++)
 	{
+		int v[3] = {i*6, i*6+1, i*6+2};
+		gFaces.push_back(Face(v,v,v));
+		v[0] = i*6+3;
+		v[1] = i*6+4;
+		v[2] = i*6+5;
 		gFaces.push_back(Face(v,v,v));
 	}
 }
@@ -425,7 +430,7 @@ void drawSurface()
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(gVertexDataSizeInBytes));
 
-	glDrawElements(GL_TRIANGLES, gFaces.size() * 3, GL_UNSIGNED_INT, 0);
+	glDrawElements(GL_TRIANGLES, sampleCount*sampleCount*6, GL_UNSIGNED_INT, 0);
 }
 
 void display()

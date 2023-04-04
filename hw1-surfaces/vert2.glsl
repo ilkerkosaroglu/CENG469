@@ -28,13 +28,13 @@ void main(void)
 	int v = gl_VertexID % 6;
 
 	if (v == 1) {
-		vertexPosition.y += singleOffset;
+		vertexPosition.x += singleOffset;
 	} else if (v == 2) {
-		vertexPosition.x += singleOffset;
-	} else if (v == 3) {
-		vertexPosition.x += singleOffset;
-	} else if (v == 4) {
 		vertexPosition.y += singleOffset;
+	} else if (v == 3) {
+		vertexPosition.y += singleOffset;
+	} else if (v == 4) {
+		vertexPosition.x += singleOffset;
 	} else if (v == 5) {
 		vertexPosition.x += singleOffset;
 		vertexPosition.y += singleOffset;

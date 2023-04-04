@@ -12,3 +12,13 @@ max sample number = 80
 offsetleri nasıl  yapcam, total size lazım. nasıl fitliyoruz ekrana?
 
 which way is up?
+
+tried to draw simple triangle. Nothing was showing.
+Figured rasterizer couldn't do it (why?)
+
+Turns out, gl_vertexID was per vertex sent to gpu, not drawn. Makes sense because
+it is processed in parallel.
+
+Increased my vertex count from 1 to 80*80*6
+Worked!
+
