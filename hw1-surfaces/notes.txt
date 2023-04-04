@@ -22,3 +22,7 @@ it is processed in parallel.
 Increased my vertex count from 1 to 80*80*6
 Worked!
 
+confirmed that gl_vertexID can reach sample*sample*6-1
+
+used varying dbg to print output to screen using a basic triangle and its color.
+

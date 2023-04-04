@@ -12,16 +12,18 @@ layout(location=1) in vec3 inNormal;
 out vec4 fragWorldPos;
 out vec3 fragWorldNor;
 
+out vec4 dbg;
+
 void main(void)
 {
 	// Determine the indices of the vertex in the 6x6 grid
-	int s = int(xyss.z);
-	float siz = xyss.w;
-	int tots = s*s*6;
-	float singleOffset = siz / float(s);
+	int sampleSize = int(xyss.z);
+	float sizePerSurface = xyss.w;
 
-    int x = int((gl_VertexID/6) % s);
-    int y = int((gl_VertexID/6) / s);
+	float singleOffset = sizePerSurface / float(sampleSize);
+
+    int x = int((gl_VertexID/6) % sampleSize);
+    int y = int((gl_VertexID/6) / sampleSize);
 
 	// Compute the position of the vertex
     vec2 vertexPosition = vec2(float(x) * singleOffset, float(y) * singleOffset);
@@ -41,27 +43,34 @@ void main(void)
 	}
 
 	// shift surfaces
-	vertexPosition.x += -0.5 + xyss.x * siz;
-	vertexPosition.y += -0.5 + xyss.y * siz;
+	vertexPosition.x += -0.5 + xyss.x * sizePerSurface;
+	vertexPosition.y += -0.5 + xyss.y * sizePerSurface;
+
+	vec3 vertexP = vec3(vertexPosition, 0);
 
 	// Compute the world coordinates of the vertex and its normal.
 	// These coordinates will be interpolated during the rasterization
 	// stage and the fragment shader will receive the interpolated
 	// coordinates.
 
-	fragWorldPos = modelingMatrix * vec4(vertexPosition, 0, 1);
+	fragWorldPos = modelingMatrix * vec4(vertexP, 1);
 	fragWorldNor = inverse(transpose(mat3x3(modelingMatrix))) * vec3(0, 0, 1);
 
-	if(gl_VertexID%3 == 0) {
-		gl_Position = vec4(0, 1, 0, 1);
-	}
-	if(gl_VertexID%3 == 1) {
-		gl_Position = vec4(-1, -1, 0, 1);
-	}
-	if(gl_VertexID%3 == 2) {
-		gl_Position = vec4(1, -1, 0, 1);
-	}
+	gl_Position = projectionMatrix * viewingMatrix * modelingMatrix * vec4(vertexP, 1);
+	dbg = projectionMatrix * viewingMatrix * modelingMatrix * vec4(vertexP, 1);
 
-    // gl_Position = projectionMatrix * viewingMatrix * modelingMatrix * vec4(inVertex, 1);
+	// int stt=0;
+	// // int stt=sampleSize*sampleSize*6-3;
+	// if(gl_VertexID >= stt && gl_VertexID < stt+3) {
+	// 	if(gl_VertexID%3 == 0) {
+	// 		gl_Position = vec4(0, 1, 0, 1);
+	// 	}
+	// 	if(gl_VertexID%3 == 1) {
+	// 		gl_Position = vec4(-1, -1, 0, 1);
+	// 	}
+	// 	if(gl_VertexID%3 == 2) {
+	// 		gl_Position = vec4(1, -1, 0, 1);
+	// 	}
+	// }
 }
 

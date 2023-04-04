@@ -26,6 +26,8 @@ uniform vec3 eyePos;
 in vec4 fragWorldPos;
 in vec3 fragWorldNor;
 
+in vec4 dbg;
+
 out vec4 fragColor;
 
 void main(void)
@@ -55,4 +57,11 @@ void main(void)
 	}
 	vec3 ambientColor = Iamb * ka;
 	fragColor = vec4(col+ambientColor, 1);
+
+	vec3 dbgv = dbg.xyz;
+	// dbgv = dbgv.xyz+vec3(0.5,0.5,0.5);
+	dbgv = dbgv.xyz*vec3(32, 32, 32);
+	fragColor = vec4(dbgv, 1);
+	// fragColor = vec4(dbg.xyz+vec3(0.5,0.5,0.5), 1);
+	// fragColor = dbg;
 }
