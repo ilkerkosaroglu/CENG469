@@ -13,6 +13,14 @@ vec3 ka = vec3(0.3, 0.3, 0.3);   // ambient reflectance coefficient
 vec3 ks = vec3(0.8, 0.8, 0.8);   // specular reflectance coefficient
 vec3 lightPos = vec3(5, 5, 5);   // light position in world coordinates
 
+struct Light
+{
+	vec3 position;
+	vec3 intensity;
+};
+
+uniform Light light[5];
+
 uniform vec3 eyePos;
 
 in vec4 fragWorldPos;
@@ -39,4 +47,5 @@ void main(void)
 	vec3 ambientColor = Iamb * ka;
 
 	fragColor = vec4(diffuseColor + specularColor + ambientColor, 1);
+	fragColor = vec4(1,1,1, 1);
 }

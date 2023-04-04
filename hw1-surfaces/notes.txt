@@ -4,3 +4,11 @@ instead: https://learnopengl.com/Lighting/Multiple-lights
 decided to use https://subscription.packtpub.com/book/game-development/9781849695046/1/ch01lvl1sec13/dynamically-subdividing-a-plane-using-the-geometry-shader
 
 bernstein shader: https://www.shadertoy.com/view/lsKXDK
+
+total number of vertices per draw = 1
+total number of triangles per draw = 80*80*2
+max sample number = 80
+
+offsetleri nasıl  yapcam, total size lazım. nasıl fitliyoruz ekrana?
+
+which way is up?

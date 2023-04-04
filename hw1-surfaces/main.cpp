@@ -16,25 +16,45 @@
 #include <glm/gtc/type_ptr.hpp> 
 //#include <glm/gtc/quaternion.hpp>
 //#include <glm/gtx/quaternion.hpp>
+#define dbg(x) cout << #x << ": " << x << endl;
+#define pv(x) cout<<#x<<": ";for(auto k:x){ cout<<k<<" "; }cout<<endl;
 
 #define BUFFER_OFFSET(i) ((char*)NULL + (i))
 
 using namespace std;
 
-GLuint gProgram[2];
+const int MAX_SAMPLES = 80;
+const int MIN_SAMPLES = 2;
+
+class Surface
+{
+public:
+	glm::vec4 xyss; // starting point of the surface
+	glm::mat4 cp;	// control point heights
+};
+
+vector<Surface> gSurfaces;
+int sampleCount = 10;
+
+GLuint gProgram;
 int gWidth, gHeight;
 
-GLint modelingMatrixLoc[2];
-GLint viewingMatrixLoc[2];
-GLint projectionMatrixLoc[2];
-GLint eyePosLoc[2];
+glm::vec3 gLightPos[5];
+glm::vec3 gLightI[5];
+
+GLint modelingMatrixLoc;
+GLint viewingMatrixLoc;
+GLint projectionMatrixLoc;
+GLint eyePosLoc;
+GLint controlPointsLoc;
+GLint xyssLoc;
+GLint lightPosLoc[5];
+GLint lightILoc[5];
 
 glm::mat4 projectionMatrix;
 glm::mat4 viewingMatrix;
 glm::mat4 modelingMatrix;
-glm::vec3 eyePos(0, 0, 0);
-
-int activeProgramIndex = 0;
+glm::vec3 eyePos(0, 0, 2);
 
 struct Vertex
 {
@@ -79,148 +99,16 @@ GLuint gVertexAttribBuffer, gIndexBuffer;
 GLint gInVertexLoc, gInNormalLoc;
 int gVertexDataSizeInBytes, gNormalDataSizeInBytes;
 
-bool ParseObj(const string& fileName)
-{
-	fstream myfile;
-
-	// Open the input 
-	myfile.open(fileName.c_str(), std::ios::in);
-
-	if (myfile.is_open())
-	{
-		string curLine;
-
-		while (getline(myfile, curLine))
-		{
-			stringstream str(curLine);
-			GLfloat c1, c2, c3;
-			GLuint index[9];
-			string tmp;
-
-			if (curLine.length() >= 2)
-			{
-				if (curLine[0] == 'v')
-				{
-					if (curLine[1] == 't') // texture
-					{
-						str >> tmp; // consume "vt"
-						str >> c1 >> c2;
-						gTextures.push_back(Texture(c1, c2));
-					}
-					else if (curLine[1] == 'n') // normal
-					{
-						str >> tmp; // consume "vn"
-						str >> c1 >> c2 >> c3;
-						gNormals.push_back(Normal(c1, c2, c3));
-					}
-					else // vertex
-					{
-						str >> tmp; // consume "v"
-						str >> c1 >> c2 >> c3;
-						gVertices.push_back(Vertex(c1, c2, c3));
-					}
-				}
-				else if (curLine[0] == 'f') // face
-				{
-					str >> tmp; // consume "f"
-					char c;
-					int vIndex[3], nIndex[3], tIndex[3];
-					str >> vIndex[0]; str >> c >> c; // consume "//"
-					str >> nIndex[0];
-					str >> vIndex[1]; str >> c >> c; // consume "//"
-					str >> nIndex[1];
-					str >> vIndex[2]; str >> c >> c; // consume "//"
-					str >> nIndex[2];
-
-					assert(vIndex[0] == nIndex[0] &&
-						vIndex[1] == nIndex[1] &&
-						vIndex[2] == nIndex[2]); // a limitation for now
-
-					// make indices start from 0
-					for (int c = 0; c < 3; ++c)
-					{
-						vIndex[c] -= 1;
-						nIndex[c] -= 1;
-						tIndex[c] -= 1;
-					}
-
-					gFaces.push_back(Face(vIndex, tIndex, nIndex));
-				}
-				else
-				{
-					cout << "Ignoring unidentified line in obj file: " << curLine << endl;
-				}
-			}
-
-			//data += curLine;
-			if (!myfile.eof())
-			{
-				//data += "\n";
-			}
-		}
-
-		myfile.close();
-	}
-	else
-	{
-		return false;
-	}
-
-	/*
-	for (int i = 0; i < gVertices.size(); ++i)
-	{
-		Vector3 n;
-
-		for (int j = 0; j < gFaces.size(); ++j)
-		{
-			for (int k = 0; k < 3; ++k)
-			{
-				if (gFaces[j].vIndex[k] == i)
-				{
-					// face j contains vertex i
-					Vector3 a(gVertices[gFaces[j].vIndex[0]].x,
-							  gVertices[gFaces[j].vIndex[0]].y,
-							  gVertices[gFaces[j].vIndex[0]].z);
-
-					Vector3 b(gVertices[gFaces[j].vIndex[1]].x,
-							  gVertices[gFaces[j].vIndex[1]].y,
-							  gVertices[gFaces[j].vIndex[1]].z);
-
-					Vector3 c(gVertices[gFaces[j].vIndex[2]].x,
-							  gVertices[gFaces[j].vIndex[2]].y,
-							  gVertices[gFaces[j].vIndex[2]].z);
-
-					Vector3 ab = b - a;
-					Vector3 ac = c - a;
-					Vector3 normalFromThisFace = (ab.cross(ac)).getNormalized();
-					n += normalFromThisFace;
-				}
-
-			}
-		}
-
-		n.normalize();
-
-		gNormals.push_back(Normal(n.x, n.y, n.z));
-	}
-	*/
-
-	assert(gVertices.size() == gNormals.size());
-
-	return true;
-}
-
-class Surface
-{
-	public:
-	float x, y; // starting point of the surface
-	float cp[4][4]; // control point heights
-};
 
 // use this function instead of parseObj
-bool createSurfaces(int w, int h){
+void createSurfaces(){
 	GLfloat x = 0;
 	gVertices.push_back(Vertex(x, x, x));
+	int v[3] = {0, 0, 0};
+	for (int i = 0; i < MAX_SAMPLES * MAX_SAMPLES * 2; i++)
+	{
+		gFaces.push_back(Face(v,v,v));
+	}
 }
 
 void initVBOForSurfaces()
@@ -326,6 +214,91 @@ bool ReadDataFromFile(
 	return true;
 }
 
+bool ReadDataFromFile(
+	const string &fileName, ///< [in]  Name of the shader file
+	vector<string> &data)			///< [out] The contents of the file
+{
+	fstream myfile;
+
+	// Open the input
+	myfile.open(fileName.c_str(), std::ios::in);
+
+	if (myfile.is_open())
+	{
+		string curLine;
+
+		while (getline(myfile, curLine))
+		{
+			stringstream ss(curLine);
+			string token;
+			while(ss >> token){
+				data.push_back(token);
+			}
+		}
+
+		myfile.close();
+	}
+	else
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+void setSampleSize(int size)
+{
+	// loop each surface
+	for(auto k: gSurfaces){
+		k.xyss.z = size*1.0f;
+	}
+}
+
+void ParseObj(const string &fileName)
+{
+	vector<string> data;
+	ReadDataFromFile(fileName, data);
+
+	// for(int i=0; i<data.size();i++){
+	// 	cout<<data[i]<<endl;
+	// }
+	int numLights = stoi(data[0]);
+	int height = stoi(data[numLights*6+1]);
+	int width = stoi(data[numLights*6+2]);
+	int lightsStart = 1;
+	int start = numLights*6+3;
+
+	// parse lights
+	for(int i=0; i<numLights; i++){
+		gLightPos[i] = glm::vec3(stof(data[lightsStart + i * 6]), stof(data[lightsStart + i * 6 + 1]), stof(data[lightsStart + i * 6 + 2]));
+		gLightI[i] = glm::vec3(stof(data[lightsStart + i * 6 + 3]), stof(data[lightsStart + i * 6 + 4]), stof(data[lightsStart + i * 6 + 5]));
+	}
+
+	for(int i=numLights; i<5; i++){
+		gLightPos[i] = glm::vec3(0.0f, 0.0f, 0.0f);
+		gLightI[i] = glm::vec3(0.0f, 0.0f, 0.0f);
+	}
+
+	// parse surfaces
+	gSurfaces.resize((height*width)/16);
+	float sizePerSurface = 4.0f / max(height, width);
+	// loop each surface
+	for(int y=0; y<height/4;y++){
+		for(int x=0;x<width/4;x++){
+			int surfaceIndex = y*(width/4) + x;
+			gSurfaces[surfaceIndex].xyss = glm::vec4(x * 1.0f, y * 1.0f, sampleCount*1.0f, sizePerSurface);
+			// loop surface data
+			for(int i=y*4; i<4; i++){
+				for(int j=x*4; j<4; j++){
+					int index = start + i*width + j;
+					gSurfaces[surfaceIndex].cp[i][j] = stof(data[index]);
+				}
+			}
+		}
+	}
+}
+
 GLuint createVS(const char* shaderName)
 {
 	string shaderSource;
@@ -380,39 +353,23 @@ void initShaders()
 {
 	// Create the programs
 
-	gProgram[0] = glCreateProgram();
-	gProgram[1] = glCreateProgram();
+	gProgram = glCreateProgram();
 
 	// Create the shaders for both programs
 
-	GLuint vs1 = createVS("vert.glsl");
-	GLuint fs1 = createFS("frag.glsl");
-
-	GLuint vs2 = createVS("vert2.glsl");
-	GLuint fs2 = createFS("frag2.glsl");
+	GLuint vs = createVS("vert2.glsl");
+	GLuint fs = createFS("frag2.glsl");
 
 	// Attach the shaders to the programs
 
-	glAttachShader(gProgram[0], vs1);
-	glAttachShader(gProgram[0], fs1);
-
-	glAttachShader(gProgram[1], vs2);
-	glAttachShader(gProgram[1], fs2);
+	glAttachShader(gProgram, vs);
+	glAttachShader(gProgram, fs);
 
 	// Link the programs
 
-	glLinkProgram(gProgram[0]);
+	glLinkProgram(gProgram);
 	GLint status;
-	glGetProgramiv(gProgram[0], GL_LINK_STATUS, &status);
-
-	if (status != GL_TRUE)
-	{
-		cout << "Program link failed" << endl;
-		exit(-1);
-	}
-
-	glLinkProgram(gProgram[1]);
-	glGetProgramiv(gProgram[1], GL_LINK_STATUS, &status);
+	glGetProgramiv(gProgram, GL_LINK_STATUS, &status);
 
 	if (status != GL_TRUE)
 	{
@@ -421,122 +378,46 @@ void initShaders()
 	}
 
 	// Get the locations of the uniform variables from both programs
+	modelingMatrixLoc = glGetUniformLocation(gProgram, "modelingMatrix");
+	viewingMatrixLoc = glGetUniformLocation(gProgram, "viewingMatrix");
+	projectionMatrixLoc = glGetUniformLocation(gProgram, "projectionMatrix");
+	eyePosLoc = glGetUniformLocation(gProgram, "eyePos");
+	controlPointsLoc = glGetUniformLocation(gProgram, "controlPoints");
+	xyssLoc = glGetUniformLocation(gProgram, "xyss");
 
-	for (int i = 0; i < 2; ++i)
-	{
-		modelingMatrixLoc[i] = glGetUniformLocation(gProgram[i], "modelingMatrix");
-		viewingMatrixLoc[i] = glGetUniformLocation(gProgram[i], "viewingMatrix");
-		projectionMatrixLoc[i] = glGetUniformLocation(gProgram[i], "projectionMatrix");
-		eyePosLoc[i] = glGetUniformLocation(gProgram[i], "eyePos");
+	for (int i = 0; i < 4; ++i){
+		string sp = "light[" + to_string(i) + "].position";
+		string si = "light[" + to_string(i) + "].intensity";
+		lightPosLoc[i] = glGetUniformLocation(gProgram, sp.c_str());
+		lightILoc[i] = glGetUniformLocation(gProgram, si.c_str());
 	}
-}
-
-void initVBO()
-{
-	GLuint vao;
-	glGenVertexArrays(1, &vao);
-	assert(vao > 0);
-	glBindVertexArray(vao);
-	cout << "vao = " << vao << endl;
-
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	assert(glGetError() == GL_NONE);
-
-	glGenBuffers(1, &gVertexAttribBuffer);
-	glGenBuffers(1, &gIndexBuffer);
-
-	assert(gVertexAttribBuffer > 0 && gIndexBuffer > 0);
-
-	glBindBuffer(GL_ARRAY_BUFFER, gVertexAttribBuffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gIndexBuffer);
-
-	gVertexDataSizeInBytes = gVertices.size() * 3 * sizeof(GLfloat);
-	gNormalDataSizeInBytes = gNormals.size() * 3 * sizeof(GLfloat);
-	int indexDataSizeInBytes = gFaces.size() * 3 * sizeof(GLuint);
-	GLfloat* vertexData = new GLfloat[gVertices.size() * 3];
-	GLfloat* normalData = new GLfloat[gNormals.size() * 3];
-	GLuint* indexData = new GLuint[gFaces.size() * 3];
-
-	float minX = 1e6, maxX = -1e6;
-	float minY = 1e6, maxY = -1e6;
-	float minZ = 1e6, maxZ = -1e6;
-
-	for (int i = 0; i < gVertices.size(); ++i)
-	{
-		vertexData[3 * i] = gVertices[i].x;
-		vertexData[3 * i + 1] = gVertices[i].y;
-		vertexData[3 * i + 2] = gVertices[i].z;
-
-		minX = std::min(minX, gVertices[i].x);
-		maxX = std::max(maxX, gVertices[i].x);
-		minY = std::min(minY, gVertices[i].y);
-		maxY = std::max(maxY, gVertices[i].y);
-		minZ = std::min(minZ, gVertices[i].z);
-		maxZ = std::max(maxZ, gVertices[i].z);
-	}
-
-	std::cout << "minX = " << minX << std::endl;
-	std::cout << "maxX = " << maxX << std::endl;
-	std::cout << "minY = " << minY << std::endl;
-	std::cout << "maxY = " << maxY << std::endl;
-	std::cout << "minZ = " << minZ << std::endl;
-	std::cout << "maxZ = " << maxZ << std::endl;
-
-	for (int i = 0; i < gNormals.size(); ++i)
-	{
-		normalData[3 * i] = gNormals[i].x;
-		normalData[3 * i + 1] = gNormals[i].y;
-		normalData[3 * i + 2] = gNormals[i].z;
-	}
-
-	for (int i = 0; i < gFaces.size(); ++i)
-	{
-		indexData[3 * i] = gFaces[i].vIndex[0];
-		indexData[3 * i + 1] = gFaces[i].vIndex[1];
-		indexData[3 * i + 2] = gFaces[i].vIndex[2];
-	}
-
-
-	glBufferData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes + gNormalDataSizeInBytes, 0, GL_STATIC_DRAW);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, gVertexDataSizeInBytes, vertexData);
-	glBufferSubData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes, gNormalDataSizeInBytes, normalData);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexDataSizeInBytes, indexData, GL_STATIC_DRAW);
-
-	// done copying; can free now
-	delete[] vertexData;
-	delete[] normalData;
-	delete[] indexData;
-
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(gVertexDataSizeInBytes));
 }
 
 void init()
 {
-	// ParseObj("armadillo.obj");
-	ParseObj("bunny.obj");
+	createSurfaces();
 
 	glEnable(GL_DEPTH_TEST);
 	initShaders();
-	initVBO();
+	initVBOForSurfaces();
 }
 
-vector<Surface> gSurfaces;
-int sampleCount = 10;
-
-void drawSurface(int surfaceIndex)
+void setLights()
 {
-	glBindBuffer(GL_ARRAY_BUFFER, gVertexAttribBuffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gIndexBuffer);
-
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(gVertexDataSizeInBytes));
-
-	glDrawElements(GL_TRIANGLES, sampleCount*sampleCount*6, GL_UNSIGNED_INT, 0);
+	for (int i = 0; i < 4; ++i){
+		glUniform3fv(lightPosLoc[i], 1, glm::value_ptr(gLightPos[i]));
+		glUniform3fv(lightILoc[i], 1, glm::value_ptr(gLightI[i]));
+	}
 }
 
-void drawModel()
+void setSurfaceUniforms(int surfaceIndex){
+	Surface &surface = gSurfaces[surfaceIndex];
+
+	glUniformMatrix4fv(controlPointsLoc, 1, GL_FALSE, glm::value_ptr(surface.cp));
+	glUniform4fv(xyssLoc, 1, glm::value_ptr(surface.xyss));
+}
+
+void drawSurface()
 {
 	glBindBuffer(GL_ARRAY_BUFFER, gVertexAttribBuffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gIndexBuffer);
@@ -563,17 +444,22 @@ void display()
 	glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (0. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
 	glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-180. / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
 	glm::mat4 matRz = glm::rotate<float>(glm::mat4(1.0), angleRad, glm::vec3(0.0, 0.0, 1.0));
-	modelingMatrix = matT * matRz * matRy * matRx;
+	modelingMatrix = matRz * matRy * matRx;
 
 	// Set the active program and the values of its uniform variables
-	glUseProgram(gProgram[activeProgramIndex]);
-	glUniformMatrix4fv(projectionMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
-	glUniformMatrix4fv(viewingMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
-	glUniformMatrix4fv(modelingMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(modelingMatrix));
-	glUniform3fv(eyePosLoc[activeProgramIndex], 1, glm::value_ptr(eyePos));
+	glUseProgram(gProgram);
+	viewingMatrix = glm::lookAt(eyePos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+	glUniformMatrix4fv(projectionMatrixLoc, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+	glUniformMatrix4fv(viewingMatrixLoc, 1, GL_FALSE, glm::value_ptr(viewingMatrix));
+	glUniformMatrix4fv(modelingMatrixLoc, 1, GL_FALSE, glm::value_ptr(modelingMatrix));
+	glUniform3fv(eyePosLoc, 1, glm::value_ptr(eyePos));
+	setLights();
 
-	// Draw the scene
-	drawModel();
+	// Draw surfaces
+	for (int i = 0; i < gSurfaces.size(); i++){
+		setSurfaceUniforms(i);
+		drawSurface();
+	}
 
 	angle += 0.5;
 }
@@ -608,7 +494,7 @@ void reshape(GLFWwindow* window, int w, int h)
 	//glLoadIdentity();
 }
 
-int polygonMode = GL_FILL;
+int polygonMode = GL_LINE;
 void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	if (key == GLFW_KEY_Q && action == GLFW_PRESS)
@@ -618,12 +504,12 @@ void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 	else if (key == GLFW_KEY_G && action == GLFW_PRESS)
 	{
 		//glShadeModel(GL_SMOOTH);
-		activeProgramIndex = 0;
+
 	}
 	else if (key == GLFW_KEY_P && action == GLFW_PRESS)
 	{
 		//glShadeModel(GL_SMOOTH);
-		activeProgramIndex = 1;
+
 	}
 	else if (key == GLFW_KEY_F && action == GLFW_PRESS)
 	{
@@ -649,6 +535,12 @@ void mainLoop(GLFWwindow* window)
 	}
 }
 
+void debugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
+{
+	printf("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s",
+		(type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+		type, severity, message);
+}
 int main(int argc, char** argv)   // Create Main Function For Bringing It All Together
 {
 	GLFWwindow* window;
@@ -662,6 +554,7 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
 	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
@@ -689,6 +582,15 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 	strcat(rendererInfo, " - ");
 	strcat(rendererInfo, (const char*)glGetString(GL_VERSION));
 	glfwSetWindowTitle(window, rendererInfo);
+
+	if(argc > 1)
+		ParseObj(argv[1]);
+	else {
+		std::cout << "Usage: " << argv[0] << " <input file>" << std::endl;
+		exit(-1);
+	}
+
+	glDebugMessageCallback(debugCallback, NULL);
 
 	init();
 
