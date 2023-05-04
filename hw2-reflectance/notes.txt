@@ -1,0 +1,33 @@
+Deferred shading - G buffer - Multiple Passes
+instead: https://learnopengl.com/Lighting/Multiple-lights
+
+decided to use https://subscription.packtpub.com/book/game-development/9781849695046/1/ch01lvl1sec13/dynamically-subdividing-a-plane-using-the-geometry-shader
+
+bernstein shader: https://www.shadertoy.com/view/lsKXDK
+
+total number of vertices per draw = 1
+total number of triangles per draw = 80*80*2
+max sample number = 80
+
+offsetleri nasıl  yapcam, total size lazım. nasıl fitliyoruz ekrana?
+
+which way is up?
+
+tried to draw simple triangle. Nothing was showing.
+Figured rasterizer couldn't do it (why?)
+
+Turns out, gl_vertexID was per vertex sent to gpu, not drawn. Makes sense because
+it is processed in parallel.
+
+Increased my vertex count from 1 to 80*80*6
+Worked!
+
+confirmed that gl_vertexID can reach sample*sample*6-1
+
+used varying dbg to print output to screen using a basic triangle and its color.
+
+
+don't forget to close debug context, and check renderer on lab computers.
+
+ordering the rectangles and their offsets was a bit hard.
+
