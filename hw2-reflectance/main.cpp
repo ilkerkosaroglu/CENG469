@@ -16,49 +16,25 @@
 #include <glm/gtc/type_ptr.hpp> 
 //#include <glm/gtc/quaternion.hpp>
 //#include <glm/gtx/quaternion.hpp>
-#define dbg(x) cout << #x << ": " << x << endl;
-#define pv(x) cout<<#x<<": ";for(auto k:x){ cout<<k<<" "; }cout<<endl;
 
 #define BUFFER_OFFSET(i) ((char*)NULL + (i))
 
 using namespace std;
 
-const int MAX_SAMPLES = 80;
-const int MIN_SAMPLES = 2;
-
-class Surface
-{
-public:
-	glm::vec4 xyss; // starting point of the surface
-	glm::mat4 cp;	// control point heights
-};
-
-vector<Surface> gSurfaces;
-int sampleCount = 10;
-
-float curRotation = -30;
-float coordMultiplier = 1.0f;
-
-GLuint gProgram;
+GLuint gProgram[2];
 int gWidth, gHeight;
 
-glm::vec3 gLightPos[5];
-glm::vec3 gLightI[5];
-
-GLint modelingMatrixLoc;
-GLint viewingMatrixLoc;
-GLint projectionMatrixLoc;
-GLint eyePosLoc;
-GLint controlPointsLoc;
-GLint xyssLoc;
-GLint coordMultiplierLoc;
-GLint lightPosLoc[5];
-GLint lightILoc[5];
+GLint modelingMatrixLoc[2];
+GLint viewingMatrixLoc[2];
+GLint projectionMatrixLoc[2];
+GLint eyePosLoc[2];
 
 glm::mat4 projectionMatrix;
 glm::mat4 viewingMatrix;
 glm::mat4 modelingMatrix;
-glm::vec3 eyePos(0, 0, 2);
+glm::vec3 eyePos(0, 0, 0);
+
+int activeProgramIndex = 0;
 
 struct Vertex
 {
@@ -103,78 +79,135 @@ GLuint gVertexAttribBuffer, gIndexBuffer;
 GLint gInVertexLoc, gInNormalLoc;
 int gVertexDataSizeInBytes, gNormalDataSizeInBytes;
 
-
-// use this function instead of parseObj
-void createSurfaces(){
-	GLfloat x = 0;
-	for (int i = 0; i < MAX_SAMPLES * MAX_SAMPLES*6; i++)
-	gVertices.push_back(Vertex(x, x, x));
-	for (int i = 0; i < MAX_SAMPLES * MAX_SAMPLES; i++)
-	{
-		int v[3] = {i*6, i*6+1, i*6+2};
-		gFaces.push_back(Face(v,v,v));
-		v[0] = i*6+3;
-		v[1] = i*6+4;
-		v[2] = i*6+5;
-		gFaces.push_back(Face(v,v,v));
-	}
-}
-
-void initVBOForSurfaces()
+bool ParseObj(const string& fileName)
 {
-	GLuint vao;
-	glGenVertexArrays(1, &vao);
-	assert(vao > 0);
-	glBindVertexArray(vao);
-	// cout << "vao = " << vao << endl;
+	fstream myfile;
 
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	assert(glGetError() == GL_NONE);
+	// Open the input 
+	myfile.open(fileName.c_str(), std::ios::in);
 
-	glGenBuffers(1, &gVertexAttribBuffer);
-	glGenBuffers(1, &gIndexBuffer);
+	if (myfile.is_open())
+	{
+		string curLine;
 
-	assert(gVertexAttribBuffer > 0 && gIndexBuffer > 0);
+		while (getline(myfile, curLine))
+		{
+			stringstream str(curLine);
+			GLfloat c1, c2, c3;
+			GLuint index[9];
+			string tmp;
 
-	glBindBuffer(GL_ARRAY_BUFFER, gVertexAttribBuffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gIndexBuffer);
+			if (curLine.length() >= 2)
+			{
+				if (curLine[0] == 'v')
+				{
+					if (curLine[1] == 't') // texture
+					{
+						str >> tmp; // consume "vt"
+						str >> c1 >> c2;
+						gTextures.push_back(Texture(c1, c2));
+					}
+					else if (curLine[1] == 'n') // normal
+					{
+						str >> tmp; // consume "vn"
+						str >> c1 >> c2 >> c3;
+						gNormals.push_back(Normal(c1, c2, c3));
+					}
+					else // vertex
+					{
+						str >> tmp; // consume "v"
+						str >> c1 >> c2 >> c3;
+						gVertices.push_back(Vertex(c1, c2, c3));
+					}
+				}
+				else if (curLine[0] == 'f') // face
+				{
+					str >> tmp; // consume "f"
+					char c;
+					int vIndex[3], nIndex[3], tIndex[3];
+					str >> vIndex[0]; str >> c >> c; // consume "//"
+					str >> nIndex[0];
+					str >> vIndex[1]; str >> c >> c; // consume "//"
+					str >> nIndex[1];
+					str >> vIndex[2]; str >> c >> c; // consume "//"
+					str >> nIndex[2];
 
-	gVertexDataSizeInBytes = gVertices.size() * 3 * sizeof(GLfloat);
-	int indexDataSizeInBytes = gFaces.size() * 3 * sizeof(GLuint);
-	GLfloat *vertexData = new GLfloat[gVertices.size() * 3];
-	GLuint *indexData = new GLuint[gFaces.size() * 3];
+					assert(vIndex[0] == nIndex[0] &&
+						vIndex[1] == nIndex[1] &&
+						vIndex[2] == nIndex[2]); // a limitation for now
 
-	float minX = 1e6, maxX = -1e6;
-	float minY = 1e6, maxY = -1e6;
-	float minZ = 1e6, maxZ = -1e6;
+					// make indices start from 0
+					for (int c = 0; c < 3; ++c)
+					{
+						vIndex[c] -= 1;
+						nIndex[c] -= 1;
+						tIndex[c] -= 1;
+					}
 
+					gFaces.push_back(Face(vIndex, tIndex, nIndex));
+				}
+				else
+				{
+					cout << "Ignoring unidentified line in obj file: " << curLine << endl;
+				}
+			}
+
+			//data += curLine;
+			if (!myfile.eof())
+			{
+				//data += "\n";
+			}
+		}
+
+		myfile.close();
+	}
+	else
+	{
+		return false;
+	}
+
+	/*
 	for (int i = 0; i < gVertices.size(); ++i)
 	{
-		vertexData[3 * i] = gVertices[i].x;
-		vertexData[3 * i + 1] = gVertices[i].y;
-		vertexData[3 * i + 2] = gVertices[i].z;
+		Vector3 n;
+
+		for (int j = 0; j < gFaces.size(); ++j)
+		{
+			for (int k = 0; k < 3; ++k)
+			{
+				if (gFaces[j].vIndex[k] == i)
+				{
+					// face j contains vertex i
+					Vector3 a(gVertices[gFaces[j].vIndex[0]].x,
+							  gVertices[gFaces[j].vIndex[0]].y,
+							  gVertices[gFaces[j].vIndex[0]].z);
+
+					Vector3 b(gVertices[gFaces[j].vIndex[1]].x,
+							  gVertices[gFaces[j].vIndex[1]].y,
+							  gVertices[gFaces[j].vIndex[1]].z);
+
+					Vector3 c(gVertices[gFaces[j].vIndex[2]].x,
+							  gVertices[gFaces[j].vIndex[2]].y,
+							  gVertices[gFaces[j].vIndex[2]].z);
+
+					Vector3 ab = b - a;
+					Vector3 ac = c - a;
+					Vector3 normalFromThisFace = (ab.cross(ac)).getNormalized();
+					n += normalFromThisFace;
+				}
+
+			}
+		}
+
+		n.normalize();
+
+		gNormals.push_back(Normal(n.x, n.y, n.z));
 	}
+	*/
 
-	for (int i = 0; i < gFaces.size(); ++i)
-	{
-		indexData[3 * i] = gFaces[i].vIndex[0];
-		indexData[3 * i + 1] = gFaces[i].vIndex[1];
-		indexData[3 * i + 2] = gFaces[i].vIndex[2];
-	}
+	assert(gVertices.size() == gNormals.size());
 
-	// glBufferData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes, 0, GL_STATIC_DRAW);
-	// glBufferSubData(GL_ARRAY_BUFFER, 0, gVertexDataSizeInBytes, vertexData);
-	glBufferData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes, vertexData, GL_STATIC_DRAW);
-
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexDataSizeInBytes, indexData, GL_STATIC_DRAW);
-
-	// done copying; can free now
-	delete[] vertexData;
-	delete[] indexData;
-
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(gVertexDataSizeInBytes));
+	return true;
 }
 
 bool ReadDataFromFile(
@@ -207,92 +240,6 @@ bool ReadDataFromFile(
 	}
 
 	return true;
-}
-
-bool ReadDataFromFile(
-	const string &fileName, ///< [in]  Name of the shader file
-	vector<string> &data)			///< [out] The contents of the file
-{
-	fstream myfile;
-
-	// Open the input
-	myfile.open(fileName.c_str(), std::ios::in);
-
-	if (myfile.is_open())
-	{
-		string curLine;
-
-		while (getline(myfile, curLine))
-		{
-			stringstream ss(curLine);
-			string token;
-			while(ss >> token){
-				data.push_back(token);
-			}
-		}
-
-		myfile.close();
-	}
-	else
-	{
-		return false;
-	}
-
-	return true;
-}
-
-
-void setSampleSize(int newSampleSize)
-{
-	// loop each surface
-	for(auto &k: gSurfaces){
-		k.xyss.z = newSampleSize * 1.0f;
-	}
-}
-
-void ParseObj(const string &fileName)
-{
-	vector<string> data;
-	ReadDataFromFile(fileName, data);
-
-	// for(int i=0; i<data.size();i++){
-	// 	cout<<data[i]<<endl;
-	// }
-	int numLights = stoi(data[0]);
-	int height = stoi(data[numLights*6+1]);
-	int width = stoi(data[numLights*6+2]);
-	int lightsStart = 1;
-	int start = numLights*6+3;
-
-	// parse lights
-	for(int i=0; i<numLights; i++){
-		int index = lightsStart + i * 6;
-		gLightPos[i] = glm::vec3(stof(data[index]), stof(data[index + 1]), stof(data[index + 2]));
-		gLightI[i] = glm::vec3(stof(data[index + 3]), stof(data[index + 4]), stof(data[index + 5]));
-	}
-
-	for(int i=numLights; i<5; i++){
-		gLightPos[i] = glm::vec3(0.0f, 0.0f, 0.0f);
-		gLightI[i] = glm::vec3(0.0f, 0.0f, 0.0f);
-	}
-
-	// parse surfaces
-	gSurfaces.resize((height*width)/16);
-	float sizePerSurface = 4.0f / max(height, width);
-	// loop each surface
-	for(int y=0; y<height/4;y++){
-		for(int x=0;x<width/4;x++){
-			int surfaceIndex = y*(width/4) + x;
-			gSurfaces[surfaceIndex].xyss = glm::vec4(x * 1.0f, ((height/4)-y-1) * 1.0f, sampleCount*1.0f, sizePerSurface);
-			// loop surface data
-			for(int i=0; i<4; i++){
-				for(int j=0; j<4; j++){
-					int index = start + (y*4+i)*width + x*4 + j;
-					gSurfaces[surfaceIndex].cp[i][j] = stof(data[index]);
-				}
-			}
-		}
-	}
 }
 
 GLuint createVS(const char* shaderName)
@@ -349,23 +296,39 @@ void initShaders()
 {
 	// Create the programs
 
-	gProgram = glCreateProgram();
+	gProgram[0] = glCreateProgram();
+	gProgram[1] = glCreateProgram();
 
 	// Create the shaders for both programs
 
-	GLuint vs = createVS("vert2.glsl");
-	GLuint fs = createFS("frag2.glsl");
+	GLuint vs1 = createVS("vert.glsl");
+	GLuint fs1 = createFS("frag.glsl");
+
+	GLuint vs2 = createVS("vert2.glsl");
+	GLuint fs2 = createFS("frag2.glsl");
 
 	// Attach the shaders to the programs
 
-	glAttachShader(gProgram, vs);
-	glAttachShader(gProgram, fs);
+	glAttachShader(gProgram[0], vs1);
+	glAttachShader(gProgram[0], fs1);
+
+	glAttachShader(gProgram[1], vs2);
+	glAttachShader(gProgram[1], fs2);
 
 	// Link the programs
 
-	glLinkProgram(gProgram);
+	glLinkProgram(gProgram[0]);
 	GLint status;
-	glGetProgramiv(gProgram, GL_LINK_STATUS, &status);
+	glGetProgramiv(gProgram[0], GL_LINK_STATUS, &status);
+
+	if (status != GL_TRUE)
+	{
+		cout << "Program link failed" << endl;
+		exit(-1);
+	}
+
+	glLinkProgram(gProgram[1]);
+	glGetProgramiv(gProgram[1], GL_LINK_STATUS, &status);
 
 	if (status != GL_TRUE)
 	{
@@ -374,50 +337,108 @@ void initShaders()
 	}
 
 	// Get the locations of the uniform variables from both programs
-	modelingMatrixLoc = glGetUniformLocation(gProgram, "modelingMatrix");
-	viewingMatrixLoc = glGetUniformLocation(gProgram, "viewingMatrix");
-	projectionMatrixLoc = glGetUniformLocation(gProgram, "projectionMatrix");
-	eyePosLoc = glGetUniformLocation(gProgram, "eyePos");
-	controlPointsLoc = glGetUniformLocation(gProgram, "controlPoints");
-	xyssLoc = glGetUniformLocation(gProgram, "xyss");
-	coordMultiplierLoc = glGetUniformLocation(gProgram, "coordMultiplier");
 
-	for (int i = 0; i < 4; ++i){
-		string sp = "light[" + to_string(i) + "].position";
-		string si = "light[" + to_string(i) + "].intensity";
-		lightPosLoc[i] = glGetUniformLocation(gProgram, sp.c_str());
-		lightILoc[i] = glGetUniformLocation(gProgram, si.c_str());
+	for (int i = 0; i < 2; ++i)
+	{
+		modelingMatrixLoc[i] = glGetUniformLocation(gProgram[i], "modelingMatrix");
+		viewingMatrixLoc[i] = glGetUniformLocation(gProgram[i], "viewingMatrix");
+		projectionMatrixLoc[i] = glGetUniformLocation(gProgram[i], "projectionMatrix");
+		eyePosLoc[i] = glGetUniformLocation(gProgram[i], "eyePos");
 	}
 }
 
-int polygonMode = GL_FILL;
+void initVBO()
+{
+	GLuint vao;
+	glGenVertexArrays(1, &vao);
+	assert(vao > 0);
+	glBindVertexArray(vao);
+	cout << "vao = " << vao << endl;
+
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	assert(glGetError() == GL_NONE);
+
+	glGenBuffers(1, &gVertexAttribBuffer);
+	glGenBuffers(1, &gIndexBuffer);
+
+	assert(gVertexAttribBuffer > 0 && gIndexBuffer > 0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, gVertexAttribBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gIndexBuffer);
+
+	gVertexDataSizeInBytes = gVertices.size() * 3 * sizeof(GLfloat);
+	gNormalDataSizeInBytes = gNormals.size() * 3 * sizeof(GLfloat);
+	int indexDataSizeInBytes = gFaces.size() * 3 * sizeof(GLuint);
+	GLfloat* vertexData = new GLfloat[gVertices.size() * 3];
+	GLfloat* normalData = new GLfloat[gNormals.size() * 3];
+	GLuint* indexData = new GLuint[gFaces.size() * 3];
+
+	float minX = 1e6, maxX = -1e6;
+	float minY = 1e6, maxY = -1e6;
+	float minZ = 1e6, maxZ = -1e6;
+
+	for (int i = 0; i < gVertices.size(); ++i)
+	{
+		vertexData[3 * i] = gVertices[i].x;
+		vertexData[3 * i + 1] = gVertices[i].y;
+		vertexData[3 * i + 2] = gVertices[i].z;
+
+		minX = std::min(minX, gVertices[i].x);
+		maxX = std::max(maxX, gVertices[i].x);
+		minY = std::min(minY, gVertices[i].y);
+		maxY = std::max(maxY, gVertices[i].y);
+		minZ = std::min(minZ, gVertices[i].z);
+		maxZ = std::max(maxZ, gVertices[i].z);
+	}
+
+	std::cout << "minX = " << minX << std::endl;
+	std::cout << "maxX = " << maxX << std::endl;
+	std::cout << "minY = " << minY << std::endl;
+	std::cout << "maxY = " << maxY << std::endl;
+	std::cout << "minZ = " << minZ << std::endl;
+	std::cout << "maxZ = " << maxZ << std::endl;
+
+	for (int i = 0; i < gNormals.size(); ++i)
+	{
+		normalData[3 * i] = gNormals[i].x;
+		normalData[3 * i + 1] = gNormals[i].y;
+		normalData[3 * i + 2] = gNormals[i].z;
+	}
+
+	for (int i = 0; i < gFaces.size(); ++i)
+	{
+		indexData[3 * i] = gFaces[i].vIndex[0];
+		indexData[3 * i + 1] = gFaces[i].vIndex[1];
+		indexData[3 * i + 2] = gFaces[i].vIndex[2];
+	}
+
+
+	glBufferData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes + gNormalDataSizeInBytes, 0, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, gVertexDataSizeInBytes, vertexData);
+	glBufferSubData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes, gNormalDataSizeInBytes, normalData);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexDataSizeInBytes, indexData, GL_STATIC_DRAW);
+
+	// done copying; can free now
+	delete[] vertexData;
+	delete[] normalData;
+	delete[] indexData;
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(gVertexDataSizeInBytes));
+}
+
 void init()
 {
-	createSurfaces();
+	ParseObj("hw2_support_files/obj/armadillo.obj");
+	//ParseObj("bunny.obj");
 
 	glEnable(GL_DEPTH_TEST);
-	glPolygonMode(GL_FRONT_AND_BACK, polygonMode);
-
 	initShaders();
-	initVBOForSurfaces();
+	initVBO();
 }
 
-void setLights()
-{
-	for (int i = 0; i < 4; ++i){
-		glUniform3fv(lightPosLoc[i], 1, glm::value_ptr(gLightPos[i]));
-		glUniform3fv(lightILoc[i], 1, glm::value_ptr(gLightI[i]));
-	}
-}
-
-void setSurfaceUniforms(int surfaceIndex){
-	Surface &surface = gSurfaces[surfaceIndex];
-
-	glUniformMatrix4fv(controlPointsLoc, 1, GL_FALSE, glm::value_ptr(surface.cp));
-	glUniform4fv(xyssLoc, 1, glm::value_ptr(surface.xyss));
-}
-
-void drawSurface()
+void drawModel()
 {
 	glBindBuffer(GL_ARRAY_BUFFER, gVertexAttribBuffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gIndexBuffer);
@@ -425,7 +446,7 @@ void drawSurface()
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(gVertexDataSizeInBytes));
 
-	glDrawElements(GL_TRIANGLES, sampleCount*sampleCount*6, GL_UNSIGNED_INT, 0);
+	glDrawElements(GL_TRIANGLES, gFaces.size() * 3, GL_UNSIGNED_INT, 0);
 }
 
 void display()
@@ -441,26 +462,20 @@ void display()
 
 	// Compute the modeling matrix
 	glm::mat4 matT = glm::translate(glm::mat4(1.0), glm::vec3(-0.1f, -0.2f, -7.0f));
-	glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (curRotation / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
+	glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (0. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
 	glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-180. / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
 	glm::mat4 matRz = glm::rotate<float>(glm::mat4(1.0), angleRad, glm::vec3(0.0, 0.0, 1.0));
-	modelingMatrix = matRx;
-	// modelingMatrix = glm::mat4(1.0);
-	// Set the active program and the values of its uniform variables
-	glUseProgram(gProgram);
-	viewingMatrix = glm::lookAt(eyePos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-	glUniformMatrix4fv(projectionMatrixLoc, 1, GL_FALSE, glm::value_ptr(projectionMatrix));
-	glUniformMatrix4fv(viewingMatrixLoc, 1, GL_FALSE, glm::value_ptr(viewingMatrix));
-	glUniformMatrix4fv(modelingMatrixLoc, 1, GL_FALSE, glm::value_ptr(modelingMatrix));
-	glUniform3fv(eyePosLoc, 1, glm::value_ptr(eyePos));
-	glUniform1f(coordMultiplierLoc, coordMultiplier);
-	setLights();
+	modelingMatrix = matT * matRz * matRy * matRx;
 
-	// Draw surfaces
-	for (int i = 0; i < gSurfaces.size(); i++){
-		setSurfaceUniforms(i);
-		drawSurface();
-	}
+	// Set the active program and the values of its uniform variables
+	glUseProgram(gProgram[activeProgramIndex]);
+	glUniformMatrix4fv(projectionMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+	glUniformMatrix4fv(viewingMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
+	glUniformMatrix4fv(modelingMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(modelingMatrix));
+	glUniform3fv(eyePosLoc[activeProgramIndex], 1, glm::value_ptr(eyePos));
+
+	// Draw the scene
+	drawModel();
 
 	angle += 0.5;
 }
@@ -495,60 +510,25 @@ void reshape(GLFWwindow* window, int w, int h)
 	//glLoadIdentity();
 }
 
-const bool ALLOW_REPEAT = true;
-float getActionMultiplier()
-{
-	if(ALLOW_REPEAT){
-		return 0.2;
-	}
-	return 1;
-}
-bool getActionState(int action)
-{
-	return action == GLFW_PRESS || (action == GLFW_REPEAT && ALLOW_REPEAT);
-}
 void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-	if (key == GLFW_KEY_Q && getActionState(action))
+	if (key == GLFW_KEY_Q && action == GLFW_PRESS)
 	{
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 	}
-	else if (key == GLFW_KEY_R && getActionState(action))
+	else if (key == GLFW_KEY_G && action == GLFW_PRESS)
 	{
-		curRotation += 10 * getActionMultiplier();
+		//glShadeModel(GL_SMOOTH);
+		activeProgramIndex = 0;
 	}
-	else if (key == GLFW_KEY_F && getActionState(action))
+	else if (key == GLFW_KEY_P && action == GLFW_PRESS)
 	{
-		curRotation -= 10 * getActionMultiplier();
+		//glShadeModel(GL_SMOOTH);
+		activeProgramIndex = 1;
 	}
-	else if (key == GLFW_KEY_W && getActionState(action))
+	else if (key == GLFW_KEY_F && action == GLFW_PRESS)
 	{
-		sampleCount += 2;
-		sampleCount = min(sampleCount, 80);
-		setSampleSize(sampleCount);
-	}
-	else if (key == GLFW_KEY_S && getActionState(action))
-	{
-		sampleCount -= 2;
-		sampleCount = max(sampleCount, 2);
-		setSampleSize(sampleCount);
-	}
-	else if (key == GLFW_KEY_E && getActionState(action))
-	{
-		coordMultiplier += 0.1 * getActionMultiplier();
-	}
-	else if (key == GLFW_KEY_D && getActionState(action))
-	{
-		coordMultiplier -= 0.1 * getActionMultiplier();
-		coordMultiplier = max(coordMultiplier, 0.1f);
-	}
-	else if (key == GLFW_KEY_V && getActionState(action))
-	{
-		if(polygonMode == GL_FILL)
-			polygonMode = GL_LINE;
-		else
-			polygonMode = GL_FILL;
-		glPolygonMode(GL_FRONT_AND_BACK, polygonMode);
+		//glShadeModel(GL_FLAT);
 	}
 }
 
@@ -562,22 +542,6 @@ void mainLoop(GLFWwindow* window)
 	}
 }
 
-void debugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
-{
-	printf("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s",
-		(type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
-		type, severity, message);
-	cout << "GL_DEBUG_TYPE_ERROR:" << (GL_DEBUG_TYPE_ERROR == type) << std::endl;
-	cout << "GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:" << (GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR == type) << std::endl;
-	cout << "GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:" << (GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR == type) << std::endl;
-	cout << "GL_DEBUG_TYPE_PORTABILITY:" << (GL_DEBUG_TYPE_PORTABILITY == type) << std::endl;
-	cout << "GL_DEBUG_TYPE_PERFORMANCE:" << (GL_DEBUG_TYPE_PERFORMANCE == type) << std::endl;
-	cout << "GL_DEBUG_TYPE_MARKER:" << (GL_DEBUG_TYPE_MARKER == type) << std::endl;
-	cout << "GL_DEBUG_TYPE_PUSH_GROUP:" << (GL_DEBUG_TYPE_PUSH_GROUP == type) << std::endl;
-	cout << "GL_DEBUG_TYPE_POP_GROUP:" << (GL_DEBUG_TYPE_POP_GROUP == type) << std::endl;
-	cout << "GL_DEBUG_TYPE_OTHER:" << (GL_DEBUG_TYPE_OTHER == type) << std::endl;
-	cout << "GL_DONT_CARE:" << (GL_DONT_CARE == type) << std::endl;
-}
 int main(int argc, char** argv)   // Create Main Function For Bringing It All Together
 {
 	GLFWwindow* window;
@@ -591,12 +555,11 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	// glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
 	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
-	int width = 800, height = 600;
-	window = glfwCreateWindow(width, height, "CENG 469 - HW1 - 2022-2023", NULL, NULL);
+	int width = 640, height = 480;
+	window = glfwCreateWindow(width, height, "Simple Example", NULL, NULL);
 
 	if (!window)
 	{
@@ -614,20 +577,11 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 		return EXIT_FAILURE;
 	}
 
-	// char rendererInfo[512] = { 0 };
-	// strcpy(rendererInfo, (const char*)glGetString(GL_RENDERER));
-	// strcat(rendererInfo, " - ");
-	// strcat(rendererInfo, (const char*)glGetString(GL_VERSION));
-	// glfwSetWindowTitle(window, rendererInfo);
-
-	if(argc > 1)
-		ParseObj(argv[1]);
-	else {
-		std::cout << "Usage: " << argv[0] << " <input file>" << std::endl;
-		exit(-1);
-	}
-
-	glDebugMessageCallback(debugCallback, NULL);
+	char rendererInfo[512] = { 0 };
+	strcpy(rendererInfo, (const char*)glGetString(GL_RENDERER));
+	strcat(rendererInfo, " - ");
+	strcat(rendererInfo, (const char*)glGetString(GL_VERSION));
+	glfwSetWindowTitle(window, rendererInfo);
 
 	init();
 
