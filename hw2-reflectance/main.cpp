@@ -17,6 +17,10 @@
 //#include <glm/gtc/quaternion.hpp>
 //#include <glm/gtx/quaternion.hpp>
 
+#define dbg(x) cout << #x << ": " << x << endl;
+// #define dbg(x) ();
+#define pv(x) cout<<#x<<": ";for(auto k:x){ cout<<k<<" "; }cout<<endl;
+
 #define BUFFER_OFFSET(i) ((char*)NULL + (i))
 
 using namespace std;
@@ -70,18 +74,52 @@ struct Face
 	GLuint vIndex[3], tIndex[3], nIndex[3];
 };
 
-vector<Vertex> gVertices;
-vector<Texture> gTextures;
-vector<Normal> gNormals;
-vector<Face> gFaces;
+class Uniform{
+	public:
+	string name;
+	GLint location;
+	string type;
+	float value;
+};
 
-GLuint gVertexAttribBuffer, gIndexBuffer;
-GLint gInVertexLoc, gInNormalLoc;
-int gVertexDataSizeInBytes, gNormalDataSizeInBytes;
+class Geometry{
+	public:
+	vector<Vertex> vertices;
+	vector<Texture> textures;
+	vector<Normal> normals;
+	vector<Face> faces;
+	void initVBO();
+	GLuint vertexAttribBuffer, indexBuffer;
+	int vertexDataSizeInBytes, normalDataSizeInBytes;
 
-bool ParseObj(const string& fileName)
+	void drawModel();
+};
+
+// hold textures?
+class Material{
+	public:
+	string name; 
+};
+
+class RenderObject{
+	public:
+	GLint program;
+	vector<Uniform> uniforms;
+	Geometry geometry;
+	string name;
+
+};
+
+vector<RenderObject> rObjects;
+
+bool ParseObj(const string& fileName, const string& name)
 {
 	fstream myfile;
+
+	rObjects.emplace_back();
+	auto &obj = rObjects.back();
+	obj.program = gProgram[0];
+	obj.name = name;
 
 	// Open the input 
 	myfile.open(fileName.c_str(), std::ios::in);
@@ -105,19 +143,19 @@ bool ParseObj(const string& fileName)
 					{
 						str >> tmp; // consume "vt"
 						str >> c1 >> c2;
-						gTextures.push_back(Texture(c1, c2));
+						obj.geometry.textures.push_back(Texture(c1, c2));
 					}
 					else if (curLine[1] == 'n') // normal
 					{
 						str >> tmp; // consume "vn"
 						str >> c1 >> c2 >> c3;
-						gNormals.push_back(Normal(c1, c2, c3));
+						obj.geometry.normals.push_back(Normal(c1, c2, c3));
 					}
 					else // vertex
 					{
 						str >> tmp; // consume "v"
 						str >> c1 >> c2 >> c3;
-						gVertices.push_back(Vertex(c1, c2, c3));
+						obj.geometry.vertices.push_back(Vertex(c1, c2, c3));
 					}
 				}
 				else if (curLine[0] == 'f') // face
@@ -144,7 +182,7 @@ bool ParseObj(const string& fileName)
 						tIndex[c] -= 1;
 					}
 
-					gFaces.push_back(Face(vIndex, tIndex, nIndex));
+					obj.geometry.faces.push_back(Face(vIndex, tIndex, nIndex));
 				}
 				else
 				{
@@ -165,48 +203,6 @@ bool ParseObj(const string& fileName)
 	{
 		return false;
 	}
-
-	/*
-	for (int i = 0; i < gVertices.size(); ++i)
-	{
-		Vector3 n;
-
-		for (int j = 0; j < gFaces.size(); ++j)
-		{
-			for (int k = 0; k < 3; ++k)
-			{
-				if (gFaces[j].vIndex[k] == i)
-				{
-					// face j contains vertex i
-					Vector3 a(gVertices[gFaces[j].vIndex[0]].x,
-							  gVertices[gFaces[j].vIndex[0]].y,
-							  gVertices[gFaces[j].vIndex[0]].z);
-
-					Vector3 b(gVertices[gFaces[j].vIndex[1]].x,
-							  gVertices[gFaces[j].vIndex[1]].y,
-							  gVertices[gFaces[j].vIndex[1]].z);
-
-					Vector3 c(gVertices[gFaces[j].vIndex[2]].x,
-							  gVertices[gFaces[j].vIndex[2]].y,
-							  gVertices[gFaces[j].vIndex[2]].z);
-
-					Vector3 ab = b - a;
-					Vector3 ac = c - a;
-					Vector3 normalFromThisFace = (ab.cross(ac)).getNormalized();
-					n += normalFromThisFace;
-				}
-
-			}
-		}
-
-		n.normalize();
-
-		gNormals.push_back(Normal(n.x, n.y, n.z));
-	}
-	*/
-
-	assert(gVertices.size() == gNormals.size());
-
 	return true;
 }
 
@@ -347,7 +343,7 @@ void initShaders()
 	}
 }
 
-void initVBO()
+void Geometry::initVBO()
 {
 	GLuint vao;
 	glGenVertexArrays(1, &vao);
@@ -359,37 +355,44 @@ void initVBO()
 	glEnableVertexAttribArray(1);
 	assert(glGetError() == GL_NONE);
 
-	glGenBuffers(1, &gVertexAttribBuffer);
-	glGenBuffers(1, &gIndexBuffer);
+	glGenBuffers(1, &this->vertexAttribBuffer);
+	glGenBuffers(1, &this->indexBuffer);
 
-	assert(gVertexAttribBuffer > 0 && gIndexBuffer > 0);
+	assert(this->vertexAttribBuffer > 0 && this->indexBuffer > 0);
 
-	glBindBuffer(GL_ARRAY_BUFFER, gVertexAttribBuffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gIndexBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, this->vertexAttribBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->indexBuffer);
 
-	gVertexDataSizeInBytes = gVertices.size() * 3 * sizeof(GLfloat);
-	gNormalDataSizeInBytes = gNormals.size() * 3 * sizeof(GLfloat);
-	int indexDataSizeInBytes = gFaces.size() * 3 * sizeof(GLuint);
-	GLfloat* vertexData = new GLfloat[gVertices.size() * 3];
-	GLfloat* normalData = new GLfloat[gNormals.size() * 3];
-	GLuint* indexData = new GLuint[gFaces.size() * 3];
+	const int vSize = this->vertices.size();
+	dbg(vSize);
+	const int nSize = this->normals.size();
+	dbg(nSize);
+	const int fSize = this->faces.size();
+	dbg(fSize);
+
+	this->vertexDataSizeInBytes = vSize * 3 * sizeof(GLfloat);
+	this->normalDataSizeInBytes = nSize * 3 * sizeof(GLfloat);
+	int indexDataSizeInBytes = fSize * 3 * sizeof(GLuint);
+	GLfloat *vertexData = new GLfloat[vSize * 3];
+	GLfloat *normalData = new GLfloat[nSize * 3];
+	GLuint *indexData = new GLuint[fSize * 3];
 
 	float minX = 1e6, maxX = -1e6;
 	float minY = 1e6, maxY = -1e6;
 	float minZ = 1e6, maxZ = -1e6;
 
-	for (int i = 0; i < gVertices.size(); ++i)
+	for (int i = 0; i < vSize; ++i)
 	{
-		vertexData[3 * i] = gVertices[i].x;
-		vertexData[3 * i + 1] = gVertices[i].y;
-		vertexData[3 * i + 2] = gVertices[i].z;
+		vertexData[3 * i] = this->vertices[i].x;
+		vertexData[3 * i + 1] = this->vertices[i].y;
+		vertexData[3 * i + 2] = this->vertices[i].z;
 
-		minX = std::min(minX, gVertices[i].x);
-		maxX = std::max(maxX, gVertices[i].x);
-		minY = std::min(minY, gVertices[i].y);
-		maxY = std::max(maxY, gVertices[i].y);
-		minZ = std::min(minZ, gVertices[i].z);
-		maxZ = std::max(maxZ, gVertices[i].z);
+		minX = std::min(minX, this->vertices[i].x);
+		maxX = std::max(maxX, this->vertices[i].x);
+		minY = std::min(minY, this->vertices[i].y);
+		maxY = std::max(maxY, this->vertices[i].y);
+		minZ = std::min(minZ, this->vertices[i].z);
+		maxZ = std::max(maxZ, this->vertices[i].z);
 	}
 
 	std::cout << "minX = " << minX << std::endl;
@@ -399,24 +402,24 @@ void initVBO()
 	std::cout << "minZ = " << minZ << std::endl;
 	std::cout << "maxZ = " << maxZ << std::endl;
 
-	for (int i = 0; i < gNormals.size(); ++i)
+	for (int i = 0; i < nSize; ++i)
 	{
-		normalData[3 * i] = gNormals[i].x;
-		normalData[3 * i + 1] = gNormals[i].y;
-		normalData[3 * i + 2] = gNormals[i].z;
+		normalData[3 * i] = this->normals[i].x;
+		normalData[3 * i + 1] = this->normals[i].y;
+		normalData[3 * i + 2] = this->normals[i].z;
 	}
 
-	for (int i = 0; i < gFaces.size(); ++i)
+	for (int i = 0; i < fSize; ++i)
 	{
-		indexData[3 * i] = gFaces[i].vIndex[0];
-		indexData[3 * i + 1] = gFaces[i].vIndex[1];
-		indexData[3 * i + 2] = gFaces[i].vIndex[2];
+		indexData[3 * i] = this->faces[i].vIndex[0];
+		indexData[3 * i + 1] = this->faces[i].vIndex[1];
+		indexData[3 * i + 2] = this->faces[i].vIndex[2];
 	}
 
 
-	glBufferData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes + gNormalDataSizeInBytes, 0, GL_STATIC_DRAW);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, gVertexDataSizeInBytes, vertexData);
-	glBufferSubData(GL_ARRAY_BUFFER, gVertexDataSizeInBytes, gNormalDataSizeInBytes, normalData);
+	glBufferData(GL_ARRAY_BUFFER, this->vertexDataSizeInBytes + this->normalDataSizeInBytes, 0, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, this->vertexDataSizeInBytes, vertexData);
+	glBufferSubData(GL_ARRAY_BUFFER, this->vertexDataSizeInBytes, this->normalDataSizeInBytes, normalData);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexDataSizeInBytes, indexData, GL_STATIC_DRAW);
 
 	// done copying; can free now
@@ -425,28 +428,28 @@ void initVBO()
 	delete[] indexData;
 
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(gVertexDataSizeInBytes));
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(this->vertexDataSizeInBytes));
 }
 
 void init()
 {
-	ParseObj("hw2_support_files/obj/armadillo.obj");
+	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo");
 	//ParseObj("bunny.obj");
 
 	glEnable(GL_DEPTH_TEST);
 	initShaders();
-	initVBO();
+	for(auto && o: rObjects){
+		o.geometry.initVBO();
+	}
 }
 
-void drawModel()
+void Geometry::drawModel()
 {
-	glBindBuffer(GL_ARRAY_BUFFER, gVertexAttribBuffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gIndexBuffer);
 
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(gVertexDataSizeInBytes));
+	glBindBuffer(GL_ARRAY_BUFFER, this->vertexAttribBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->indexBuffer);
 
-	glDrawElements(GL_TRIANGLES, gFaces.size() * 3, GL_UNSIGNED_INT, 0);
+	glDrawElements(GL_TRIANGLES, this->faces.size() * 3, GL_UNSIGNED_INT, 0);
 }
 
 void display()
@@ -475,7 +478,9 @@ void display()
 	glUniform3fv(eyePosLoc[activeProgramIndex], 1, glm::value_ptr(eyePos));
 
 	// Draw the scene
-	drawModel();
+	for(auto && o: rObjects){
+		o.geometry.drawModel();
+	}
 
 	angle += 0.5;
 }
