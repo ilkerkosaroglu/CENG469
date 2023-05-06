@@ -94,6 +94,7 @@ class Geometry{
 	vector<Texture> textures;
 	vector<Normal> normals;
 	vector<Face> faces;
+	GLuint vao;
 	void initVBO();
 	GLuint vertexAttribBuffer, indexBuffer;
 	int vertexDataSizeInBytes, normalDataSizeInBytes;
@@ -320,8 +321,8 @@ void initShaders()
 	GLuint vs1 = createVS("vert.glsl");
 	GLuint fs1 = createFS("frag.glsl");
 
-	GLuint vs2 = createVS("vert2.glsl");
-	GLuint fs2 = createFS("frag2.glsl");
+	GLuint vs2 = createVS("skyv.glsl");
+	GLuint fs2 = createFS("skyf.glsl");
 
 	// Attach the shaders to the programs
 
@@ -365,11 +366,10 @@ void initShaders()
 
 void Geometry::initVBO()
 {
-	GLuint vao;
+	GLuint &vao = this->vao;
 	glGenVertexArrays(1, &vao);
 	assert(vao > 0);
-	glBindVertexArray(vao);
-	cout << "vao = " << vao << endl;
+	glBindVertexArray(this->vao);
 
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
@@ -450,7 +450,46 @@ void Geometry::initVBO()
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(this->vertexDataSizeInBytes));
 }
+class SkyBox: public Geometry{
+	public:
+	void draw();
+	void init();
+};
 
+void SkyBox::draw(){
+	glDepthFunc(GL_LEQUAL);
+	glDepthRange(1, 1);
+	glUseProgram(gProgram[1]);
+	glUniformMatrix4fv(projectionMatrixLoc[1], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+	glUniformMatrix4fv(viewingMatrixLoc[1], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
+	glUniform3fv(eyePosLoc[1], 1, glm::value_ptr(eyePos));
+
+	glBindVertexArray(this->vao);
+	glBindBuffer(GL_ARRAY_BUFFER, this->vertexAttribBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->indexBuffer);
+
+	glDrawElements(GL_TRIANGLES, this->faces.size() * 3, GL_UNSIGNED_INT, 0);
+	glDepthFunc(GL_LESS);
+	glDepthRange(0, 1);
+}
+
+void SkyBox::init(){
+	this->vertices.push_back(Vertex(-1, -1, 0));
+	this->vertices.push_back(Vertex(-1, 1, 0));
+	this->vertices.push_back(Vertex(1, 1, 0));
+	this->vertices.push_back(Vertex(1, -1, 0));
+	this->normals.push_back(Normal(0, 0, 1));
+	int vIndex[3] = {0, 1, 2};
+	int nIndex[3] = {0, 0, 0};
+	int tIndex[3] = {0, 0, 0};
+	this->faces.push_back(Face(vIndex, tIndex, nIndex));
+	vIndex[0] = 0;
+	vIndex[1] = 2;
+	vIndex[2] = 3;
+	this->faces.push_back(Face(vIndex, tIndex, nIndex));
+	this->initVBO();
+}
+SkyBox skybox;
 void init()
 {
 	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo");
@@ -463,6 +502,8 @@ void init()
 	for(auto && o: rObjects){
 		o.geometry.initVBO();
 	}
+
+	skybox.init();
 }
 
 void RenderObject::calculateModelMatrix(){
@@ -475,45 +516,41 @@ void Geometry::drawModel()
 {
 	glUniformMatrix4fv(modelingMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(this->modelMatrix));
 
+	glBindVertexArray(this->vao);
 	glBindBuffer(GL_ARRAY_BUFFER, this->vertexAttribBuffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->indexBuffer);
 
 	glDrawElements(GL_TRIANGLES, this->faces.size() * 3, GL_UNSIGNED_INT, 0);
 }
 
-void display()
-{
+
+void display(){
 	glClearColor(0, 0, 0, 1);
 	glClearDepth(1.0f);
 	glClearStencil(0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-	static float angle = 0;
-
-	float angleRad = (float)(angle / 180.0) * M_PI;
-
-	
 	// Compute the modeling matrices
 	for(auto && o: rObjects){
 		o.calculateModelMatrix();
 	}
 
+	skybox.draw();
+
 	// Set the active program and the values of its uniform variables
-	glUseProgram(gProgram[activeProgramIndex]);
-	glUniformMatrix4fv(projectionMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
-	glUniformMatrix4fv(viewingMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
-	glUniform3fv(eyePosLoc[activeProgramIndex], 1, glm::value_ptr(eyePos));
+	glUseProgram(gProgram[0]);
+	glUniformMatrix4fv(projectionMatrixLoc[0], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+	glUniformMatrix4fv(viewingMatrixLoc[0], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
+	glUniform3fv(eyePosLoc[0], 1, glm::value_ptr(eyePos));
 
 	// Draw the scene
 	for(auto && o: rObjects){
 		o.geometry.drawModel();
 	}
 
-	angle += 0.5;
 }
 
-void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
+void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods){
 	if (key == GLFW_KEY_Q && action == GLFW_PRESS)
 	{
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -636,6 +673,23 @@ void mouseButton(GLFWwindow* window, int button, int action, int mods)
 	}
 }
 
+void debugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)
+{
+	printf("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s",
+		   (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+		   type, severity, message);
+	cout << "GL_DEBUG_TYPE_ERROR:" << (GL_DEBUG_TYPE_ERROR == type) << std::endl;
+	cout << "GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:" << (GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR == type) << std::endl;
+	cout << "GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:" << (GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR == type) << std::endl;
+	cout << "GL_DEBUG_TYPE_PORTABILITY:" << (GL_DEBUG_TYPE_PORTABILITY == type) << std::endl;
+	cout << "GL_DEBUG_TYPE_PERFORMANCE:" << (GL_DEBUG_TYPE_PERFORMANCE == type) << std::endl;
+	cout << "GL_DEBUG_TYPE_MARKER:" << (GL_DEBUG_TYPE_MARKER == type) << std::endl;
+	cout << "GL_DEBUG_TYPE_PUSH_GROUP:" << (GL_DEBUG_TYPE_PUSH_GROUP == type) << std::endl;
+	cout << "GL_DEBUG_TYPE_POP_GROUP:" << (GL_DEBUG_TYPE_POP_GROUP == type) << std::endl;
+	cout << "GL_DEBUG_TYPE_OTHER:" << (GL_DEBUG_TYPE_OTHER == type) << std::endl;
+	cout << "GL_DONT_CARE:" << (GL_DONT_CARE == type) << std::endl;
+}
+
 int main(int argc, char** argv)   // Create Main Function For Bringing It All Together
 {
 	GLFWwindow* window;
@@ -649,6 +703,7 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
 	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
@@ -676,6 +731,8 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 	strcat(rendererInfo, " - ");
 	strcat(rendererInfo, (const char*)glGetString(GL_VERSION));
 	glfwSetWindowTitle(window, rendererInfo);
+
+	glDebugMessageCallback(debugCallback, NULL);
 
 	init();
 
