@@ -36,7 +36,12 @@ GLint eyePosLoc[2];
 glm::mat4 projectionMatrix;
 glm::mat4 viewingMatrix;
 glm::mat4 modelingMatrix;
+
+float eyeRotX = 0;
+float eyeRotY = 0;
 glm::vec3 eyePos(0, 0, 0);
+glm::vec3 orbitCenter = glm::vec3(0.f, 0.f, -7.0f);
+glm::vec3 objCenter = glm::vec3(-0.1f, -0.2f, -7.0f);
 
 int activeProgramIndex = 0;
 
@@ -464,11 +469,12 @@ void display()
 	float angleRad = (float)(angle / 180.0) * M_PI;
 
 	// Compute the modeling matrix
-	glm::mat4 matT = glm::translate(glm::mat4(1.0), glm::vec3(-0.1f, -0.2f, -7.0f));
+	glm::mat4 matT = glm::translate(glm::mat4(1.0), objCenter);
 	glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (0. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
 	glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-180. / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
 	glm::mat4 matRz = glm::rotate<float>(glm::mat4(1.0), angleRad, glm::vec3(0.0, 0.0, 1.0));
-	modelingMatrix = matT * matRz * matRy * matRx;
+	modelingMatrix = matT ;
+	// modelingMatrix = matT * matRz * matRy * matRx;
 
 	// Set the active program and the values of its uniform variables
 	glUseProgram(gProgram[activeProgramIndex]);
@@ -483,36 +489,6 @@ void display()
 	}
 
 	angle += 0.5;
-}
-
-void reshape(GLFWwindow* window, int w, int h)
-{
-	w = w < 1 ? 1 : w;
-	h = h < 1 ? 1 : h;
-
-	gWidth = w;
-	gHeight = h;
-
-	glViewport(0, 0, w, h);
-
-	//glMatrixMode(GL_PROJECTION);
-	//glLoadIdentity();
-	//glOrtho(-10, 10, -10, 10, -10, 10);
-	//gluPerspective(45, 1, 1, 100);
-
-	// Use perspective projection
-
-	float fovyRad = (float)(45.0 / 180.0) * M_PI;
-	projectionMatrix = glm::perspective(fovyRad, w/(float) h, 1.0f, 100.0f);
-
-	// Assume default camera position and orientation (camera is at
-	// (0, 0, 0) with looking at -z direction and its up vector pointing
-	// at +y direction)
-
-	viewingMatrix = glm::mat4(1);
-
-	//glMatrixMode(GL_MODELVIEW);
-	//glLoadIdentity();
 }
 
 void keyboard(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -544,6 +520,98 @@ void mainLoop(GLFWwindow* window)
 		display();
 		glfwSwapBuffers(window);
 		glfwPollEvents();
+	}
+}
+
+void setViewingMatrix()
+{
+	// view matrix
+	glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (eyeRotY / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
+	glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (eyeRotX / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
+	glm::mat4 matR = matRy * matRx;
+
+	// use original because we don't reset the rotation to 0 after rotating. (so that it doesn't accumulate)
+	auto origEyePos = glm::vec3(0.0, 0.0, 0.0);
+	glm::mat4 matIT = glm::translate(glm::mat4(1.0), -orbitCenter);
+	glm::mat4 matT = glm::translate(glm::mat4(1.0), orbitCenter);
+	auto newEyePos4 = matT * matR * matIT * glm::vec4(origEyePos, 1.0);
+
+	glm::vec3 newEyePos = glm::vec3(newEyePos4.x, newEyePos4.y, newEyePos4.z);
+
+	eyePos = newEyePos;
+
+	// Set the viewing matrix
+	viewingMatrix = glm::lookAt(newEyePos, orbitCenter, glm::vec3(0.0f, 1.0f, 0.0f));
+}
+
+void reshape(GLFWwindow *window, int w, int h)
+{
+	w = w < 1 ? 1 : w;
+	h = h < 1 ? 1 : h;
+
+	gWidth = w;
+	gHeight = h;
+
+	glViewport(0, 0, w, h);
+
+	// glMatrixMode(GL_PROJECTION);
+	// glLoadIdentity();
+	// glOrtho(-10, 10, -10, 10, -10, 10);
+	// gluPerspective(45, 1, 1, 100);
+
+	// Use perspective projection
+
+	float fovyRad = (float)(45.0 / 180.0) * M_PI;
+	projectionMatrix = glm::perspective(fovyRad, w / (float)h, 1.0f, 100.0f);
+
+	// Assume default camera position and orientation (camera is at
+	// (0, 0, 0) with looking at -z direction and its up vector pointing
+	// at +y direction)
+
+	setViewingMatrix();
+
+	// glMatrixMode(GL_MODELVIEW);
+	// glLoadIdentity();
+}
+
+int lastX = 0;
+int lastY = 0;
+
+void mouseMove(GLFWwindow* window, double xpos, double ypos)
+{
+	float mult = 0.5;
+	if(lastX == 0 && lastY == 0){
+		lastX = xpos;
+		lastY = ypos;
+		return;
+	}
+	float deltaX = xpos - lastX;
+	float deltaY = ypos - lastY;
+	lastX = xpos;
+	lastY = ypos;
+
+	eyeRotX += -deltaX*mult;
+	eyeRotY += -deltaY*mult;
+	eyeRotX = eyeRotX > 360 ? eyeRotX - 360 : eyeRotX;
+	eyeRotX = eyeRotX < 0 ? eyeRotX + 360 : eyeRotX;
+	//clamp
+	eyeRotY = glm::clamp(eyeRotY, -85.f, 85.f);
+	setViewingMatrix();
+}
+
+void mouseButton(GLFWwindow* window, int button, int action, int mods)
+{
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+	{
+		glfwSetCursorPosCallback(window, mouseMove);
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	}
+	else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
+	{
+		lastX = 0;
+		lastY = 0;
+		glfwSetCursorPosCallback(window, NULL);
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 	}
 }
 
@@ -591,6 +659,7 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 	init();
 
 	glfwSetKeyCallback(window, keyboard);
+	glfwSetMouseButtonCallback(window, mouseButton);
 	glfwSetWindowSizeCallback(window, reshape);
 
 	reshape(window, width, height); // need to call this once ourselves
