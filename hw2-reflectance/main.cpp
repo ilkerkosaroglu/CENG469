@@ -6,6 +6,7 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
+#include <map>
 #define _USE_MATH_DEFINES
 #include <math.h>
 #include <GL/glew.h>
@@ -96,7 +97,7 @@ class Geometry{
 	void initVBO();
 	GLuint vertexAttribBuffer, indexBuffer;
 	int vertexDataSizeInBytes, normalDataSizeInBytes;
-
+	glm::mat4 modelMatrix = glm::mat4(1.0f);
 	void drawModel();
 };
 
@@ -106,16 +107,33 @@ class Material{
 	string name; 
 };
 
+class Program{
+	public:
+	GLuint program;
+	string name;
+	GLuint vertexShader, fragmentShader;
+};
+
 class RenderObject{
 	public:
-	GLint program;
+	Program* program; //unused for now
 	vector<Uniform> uniforms;
 	Geometry geometry;
 	string name;
-
+	map<string, float> props;
+	glm::vec3 position;
+	void calculateModelMatrix();
 };
 
 vector<RenderObject> rObjects;
+RenderObject& getRenderObject(const string& name){
+	for(auto& obj: rObjects){
+		if(obj.name == name){
+			return obj;
+		}
+	}
+	throw "RenderObject not found";
+}
 
 bool ParseObj(const string& fileName, const string& name)
 {
@@ -123,7 +141,6 @@ bool ParseObj(const string& fileName, const string& name)
 
 	rObjects.emplace_back();
 	auto &obj = rObjects.back();
-	obj.program = gProgram[0];
 	obj.name = name;
 
 	// Open the input 
@@ -210,11 +227,9 @@ bool ParseObj(const string& fileName, const string& name)
 	}
 	return true;
 }
-
-bool ReadDataFromFile(
-	const string& fileName, ///< [in]  Name of the shader file
-	string& data)     ///< [out] The contents of the file
-{
+///< [in]  Name of the shader file
+///< [out] The contents of the file
+bool ReadDataFromFile(const string& fileName, string& data){
 	fstream myfile;
 
 	// Open the input 
@@ -439,6 +454,8 @@ void Geometry::initVBO()
 void init()
 {
 	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo");
+	auto &armadillo = getRenderObject("armadillo");
+	armadillo.position = objCenter;
 	//ParseObj("bunny.obj");
 
 	glEnable(GL_DEPTH_TEST);
@@ -448,8 +465,15 @@ void init()
 	}
 }
 
+void RenderObject::calculateModelMatrix(){
+	glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (0. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
+	glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-180. / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
+	this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy * matRx;
+}
+
 void Geometry::drawModel()
 {
+	glUniformMatrix4fv(modelingMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(this->modelMatrix));
 
 	glBindBuffer(GL_ARRAY_BUFFER, this->vertexAttribBuffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->indexBuffer);
@@ -468,19 +492,16 @@ void display()
 
 	float angleRad = (float)(angle / 180.0) * M_PI;
 
-	// Compute the modeling matrix
-	glm::mat4 matT = glm::translate(glm::mat4(1.0), objCenter);
-	glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (0. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
-	glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-180. / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
-	glm::mat4 matRz = glm::rotate<float>(glm::mat4(1.0), angleRad, glm::vec3(0.0, 0.0, 1.0));
-	modelingMatrix = matT ;
-	// modelingMatrix = matT * matRz * matRy * matRx;
+	
+	// Compute the modeling matrices
+	for(auto && o: rObjects){
+		o.calculateModelMatrix();
+	}
 
 	// Set the active program and the values of its uniform variables
 	glUseProgram(gProgram[activeProgramIndex]);
 	glUniformMatrix4fv(projectionMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 	glUniformMatrix4fv(viewingMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
-	glUniformMatrix4fv(modelingMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(modelingMatrix));
 	glUniform3fv(eyePosLoc[activeProgramIndex], 1, glm::value_ptr(eyePos));
 
 	// Draw the scene
