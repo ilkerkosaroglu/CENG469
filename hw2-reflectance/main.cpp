@@ -365,7 +365,6 @@ void initShaders()
 		projectionMatrixLoc[i] = glGetUniformLocation(gProgram[i], "projectionMatrix");
 		eyePosLoc[i] = glGetUniformLocation(gProgram[i], "eyePos");
 	}
-	glUniform1i(glGetUniformLocation(gProgram[1], "skybox"), 0);
 }
 
 void Geometry::initVBO()
@@ -492,6 +491,20 @@ void loadTexture(Image& img){
 	glGenerateMipmap(GL_TEXTURE_2D);
 }
 
+void loadCubemap(vector<string> names){
+	textures["cubemap"] = ImgTexture();
+	ImgTexture &t = textures["cubemap"];
+
+	glGenTextures(1, &t.textureId);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, t.textureId);
+
+	for (int i = 0; i < names.size(); ++i){
+		Image &img = images[names[i]];
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, img.width, img.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img.data);
+	}
+	glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+}
+
 void genRandomImage(int width, int height){
 	unsigned char *image = new unsigned char[width * height * 3];
 	for (int i = 0; i < width * height; ++i){
@@ -503,7 +516,7 @@ void genRandomImage(int width, int height){
 	loadTexture(images["random"]);
 }
 
-void readImage(const char* path, string name){
+void readImage(const char* path, string name, bool loadAsTex = true){
 	int w,h,c;
 	stbi_set_flip_vertically_on_load(true);
 	unsigned char *image = stbi_load(path, &w, &h, &c, 0);
@@ -511,8 +524,18 @@ void readImage(const char* path, string name){
 		std::cout << "Failed to load image" << std::endl;
 	}else{
 		images[name] = Image(w, h, c, image, name);
+		if(loadAsTex)
 		loadTexture(images[name]);
 	}
+}
+void readSkybox(string path){
+	readImage((path+"right.png").c_str(), "right", 0);
+	readImage((path+"left.png").c_str(), "left", 0);
+	readImage((path+"top.png").c_str(), "top", 0);
+	readImage((path+"bottom.png").c_str(), "bottom", 0);
+	readImage((path+"back.png").c_str(), "back", 0);
+	readImage((path+"front.png").c_str(), "front", 0);
+	loadCubemap({"right", "left", "top", "bottom", "back", "front"});
 }
 class SkyBox: public Geometry{
 	public:
@@ -533,8 +556,7 @@ void SkyBox::draw(){
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->indexBuffer);
 
 	glActiveTexture(GL_TEXTURE0);
-	GLuint texId = ::textures["skybox"].textureId;
-	glBindTexture(GL_TEXTURE_2D, texId);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, ::textures["cubemap"].textureId);
 
 	glDrawElements(GL_TRIANGLES, this->faces.size() * 3, GL_UNSIGNED_INT, 0);
 	glDepthFunc(GL_LESS);
@@ -556,6 +578,8 @@ void SkyBox::init(){
 	vIndex[2] = 3;
 	this->faces.push_back(Face(vIndex, tIndex, nIndex));
 	this->initVBO();
+
+	readSkybox("hw2_support_files/skybox_texture_abandoned_village/");
 }
 SkyBox skybox;
 void init()
