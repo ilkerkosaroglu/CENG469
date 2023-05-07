@@ -18,6 +18,8 @@
 //#include <glm/gtc/quaternion.hpp>
 //#include <glm/gtx/quaternion.hpp>
 
+#include "stb_image.h"
+
 #define dbg(x) cout << #x << ": " << x << endl;
 // #define dbg(x) ();
 #define pv(x) cout<<#x<<": ";for(auto k:x){ cout<<k<<" "; }cout<<endl;
@@ -450,6 +452,33 @@ void Geometry::initVBO()
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(this->vertexDataSizeInBytes));
 }
+
+class Image{
+	public:
+	int width, height, channels;
+	unsigned char *data;
+	Image(int width, int height, int channels, unsigned char *data): width(width), height(height), channels(channels), data(data){}
+};
+
+map<string, Image> textures;
+
+void genRandomImage(int width, int height){
+	unsigned char *image = new unsigned char[width * height * 3];
+	for (int i = 0; i < width * height * 3; ++i){
+		image[i] = rand() % 256;
+	}
+	textures["random"] = Image(width, height, 3, image);
+}
+
+void readImage(const char* path, const char* name){
+	int w,h,c;
+	unsigned char *image = stbi_load(path, &w, &h, &c, 0);
+	if (!image){
+		std::cout << "Failed to load image" << std::endl;
+	}else{
+		textures[name] = Image(w, h, c, image);
+	}
+}
 class SkyBox: public Geometry{
 	public:
 	void draw();
@@ -496,6 +525,7 @@ void init()
 	auto &armadillo = getRenderObject("armadillo");
 	armadillo.position = objCenter;
 	//ParseObj("bunny.obj");
+	genRandomImage(300, 300);
 
 	glEnable(GL_DEPTH_TEST);
 	initShaders();
