@@ -18,6 +18,7 @@
 //#include <glm/gtc/quaternion.hpp>
 //#include <glm/gtx/quaternion.hpp>
 
+#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 #define dbg(x) cout << #x << ": " << x << endl;
@@ -364,6 +365,7 @@ void initShaders()
 		projectionMatrixLoc[i] = glGetUniformLocation(gProgram[i], "projectionMatrix");
 		eyePosLoc[i] = glGetUniformLocation(gProgram[i], "eyePos");
 	}
+	glUniform1i(glGetUniformLocation(gProgram[1], "skybox"), 0);
 }
 
 void Geometry::initVBO()
@@ -375,7 +377,7 @@ void Geometry::initVBO()
 
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
-	assert(glGetError() == GL_NONE);
+	// assert(glGetError() == GL_NONE);
 
 	glGenBuffers(1, &this->vertexAttribBuffer);
 	glGenBuffers(1, &this->indexBuffer);
@@ -455,28 +457,61 @@ void Geometry::initVBO()
 
 class Image{
 	public:
+	string name;
 	int width, height, channels;
 	unsigned char *data;
-	Image(int width, int height, int channels, unsigned char *data): width(width), height(height), channels(channels), data(data){}
+	Image(int width, int height, int channels, unsigned char *data, string name): width(width), height(height), channels(channels), data(data), name(name){}
+	Image(){}
 };
 
-map<string, Image> textures;
+class ImgTexture{
+	public:
+	GLuint textureId;
+};
+
+map<string, Image> images;
+map<string, ImgTexture> textures;
+
+void loadTexture(Image& img){
+	textures[img.name] = ImgTexture();
+	ImgTexture &t = textures[img.name];
+
+	glGenTextures(1, &t.textureId);
+	glBindTexture(GL_TEXTURE_2D, t.textureId);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	if(img.channels == 3){
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	}else{
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+	}
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img.width, img.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img.data);
+	glGenerateMipmap(GL_TEXTURE_2D);
+}
 
 void genRandomImage(int width, int height){
 	unsigned char *image = new unsigned char[width * height * 3];
-	for (int i = 0; i < width * height * 3; ++i){
+	for (int i = 0; i < width * height; ++i){
 		image[i] = rand() % 256;
+		image[i+1] = 0;
+		image[i+2] = 0;
 	}
-	textures["random"] = Image(width, height, 3, image);
+	images["random"] = Image(width, height, 3, image, "random");
+	loadTexture(images["random"]);
 }
 
-void readImage(const char* path, const char* name){
+void readImage(const char* path, string name){
 	int w,h,c;
+	stbi_set_flip_vertically_on_load(true);
 	unsigned char *image = stbi_load(path, &w, &h, &c, 0);
 	if (!image){
 		std::cout << "Failed to load image" << std::endl;
 	}else{
-		textures[name] = Image(w, h, c, image);
+		images[name] = Image(w, h, c, image, name);
+		loadTexture(images[name]);
 	}
 }
 class SkyBox: public Geometry{
@@ -496,6 +531,10 @@ void SkyBox::draw(){
 	glBindVertexArray(this->vao);
 	glBindBuffer(GL_ARRAY_BUFFER, this->vertexAttribBuffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->indexBuffer);
+
+	glActiveTexture(GL_TEXTURE0);
+	GLuint texId = ::textures["skybox"].textureId;
+	glBindTexture(GL_TEXTURE_2D, texId);
 
 	glDrawElements(GL_TRIANGLES, this->faces.size() * 3, GL_UNSIGNED_INT, 0);
 	glDepthFunc(GL_LESS);
@@ -525,7 +564,8 @@ void init()
 	auto &armadillo = getRenderObject("armadillo");
 	armadillo.position = objCenter;
 	//ParseObj("bunny.obj");
-	genRandomImage(300, 300);
+	// genRandomImage(300, 300);
+	readImage("hw2_support_files/skybox_texture_abandoned_village/front.png", "skybox");
 
 	glEnable(GL_DEPTH_TEST);
 	initShaders();
