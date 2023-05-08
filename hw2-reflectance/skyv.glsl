@@ -2,7 +2,6 @@
 
 uniform mat4 viewingMatrix;
 uniform mat4 projectionMatrix;
-uniform vec3 eyePos;
 
 layout(location=0) in vec3 inVertex;
 

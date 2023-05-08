@@ -102,7 +102,6 @@ class Geometry{
 	GLuint vertexAttribBuffer, indexBuffer;
 	int vertexDataSizeInBytes, normalDataSizeInBytes;
 	glm::mat4 modelMatrix = glm::mat4(1.0f);
-	void drawModel();
 };
 
 // hold textures?
@@ -116,17 +115,20 @@ class Program{
 	GLuint program;
 	string name;
 	GLuint vertexShader, fragmentShader;
+	map<string, GLuint> uniforms;
 };
+
+map<string, Program> programs;
 
 class RenderObject{
 	public:
-	Program* program; //unused for now
-	vector<Uniform> uniforms;
+	Program* program;
 	Geometry geometry;
 	string name;
 	map<string, float> props;
 	glm::vec3 position;
 	void calculateModelMatrix();
+	void drawModel();
 };
 
 vector<RenderObject> rObjects;
@@ -312,59 +314,46 @@ GLuint createFS(const char* shaderName)
 	return fs;
 }
 
-void initShaders()
-{
-	// Create the programs
+Program& initShader(string name, string vert, string frag){
+	// Create the program
+	GLuint prog = glCreateProgram();
 
-	gProgram[0] = glCreateProgram();
-	gProgram[1] = glCreateProgram();
+	// Create shaders
+	GLuint vs = createVS(vert.c_str());
+	GLuint fs = createFS(frag.c_str());
 
-	// Create the shaders for both programs
+	// Attach the shaders to the program
+	glAttachShader(prog, vs);
+	glAttachShader(prog, fs);
 
-	GLuint vs1 = createVS("vert.glsl");
-	GLuint fs1 = createFS("frag.glsl");
-
-	GLuint vs2 = createVS("skyv.glsl");
-	GLuint fs2 = createFS("skyf.glsl");
-
-	// Attach the shaders to the programs
-
-	glAttachShader(gProgram[0], vs1);
-	glAttachShader(gProgram[0], fs1);
-
-	glAttachShader(gProgram[1], vs2);
-	glAttachShader(gProgram[1], fs2);
-
-	// Link the programs
-
-	glLinkProgram(gProgram[0]);
+	// Link the program
+	glLinkProgram(prog);
 	GLint status;
-	glGetProgramiv(gProgram[0], GL_LINK_STATUS, &status);
+	glGetProgramiv(prog, GL_LINK_STATUS, &status);
 
 	if (status != GL_TRUE)
 	{
-		cout << "Program link failed" << endl;
+		cout << "Program link failed for: "+name << endl;
 		exit(-1);
 	}
 
-	glLinkProgram(gProgram[1]);
-	glGetProgramiv(gProgram[1], GL_LINK_STATUS, &status);
+	auto p = Program();
+	p.program = prog;
+	p.name = name;
+	p.fragmentShader = fs;
+	p.vertexShader = vs;
+	p.uniforms["modelingMatrix"] = glGetUniformLocation(prog, "modelingMatrix");
+	p.uniforms["viewingMatrix"] = glGetUniformLocation(prog, "viewingMatrix");
+	p.uniforms["projectionMatrix"] = glGetUniformLocation(prog, "projectionMatrix");
+	p.uniforms["eyePos"] = glGetUniformLocation(prog, "eyePos");
+	programs[name] = p;
+	return programs[name];
+}
 
-	if (status != GL_TRUE)
-	{
-		cout << "Program link failed" << endl;
-		exit(-1);
-	}
-
-	// Get the locations of the uniform variables from both programs
-
-	for (int i = 0; i < 2; ++i)
-	{
-		modelingMatrixLoc[i] = glGetUniformLocation(gProgram[i], "modelingMatrix");
-		viewingMatrixLoc[i] = glGetUniformLocation(gProgram[i], "viewingMatrix");
-		projectionMatrixLoc[i] = glGetUniformLocation(gProgram[i], "projectionMatrix");
-		eyePosLoc[i] = glGetUniformLocation(gProgram[i], "eyePos");
-	}
+void initShaders(){
+	auto &skybox = initShader("skybox", "skyv.glsl", "skyf.glsl");
+	skybox.uniforms["skybox"] = glGetUniformLocation(skybox.program, "skybox");
+	auto &arm = initShader("arm", "vert.glsl", "frag.glsl");
 }
 
 void Geometry::initVBO()
@@ -568,12 +557,12 @@ class SkyBox: public Geometry{
 };
 
 void SkyBox::draw(){
+	auto program = &programs["skybox"];
 	glDepthFunc(GL_LEQUAL);
 	glDepthRange(1, 1);
-	glUseProgram(gProgram[1]);
-	glUniformMatrix4fv(projectionMatrixLoc[1], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
-	glUniformMatrix4fv(viewingMatrixLoc[1], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
-	glUniform3fv(eyePosLoc[1], 1, glm::value_ptr(eyePos));
+	glUseProgram(program->program);
+	glUniformMatrix4fv(program->uniforms["projectionMatrix"], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+	glUniformMatrix4fv(program->uniforms["viewingMatrix"], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
 
 	glBindVertexArray(this->vao);
 	glBindBuffer(GL_ARRAY_BUFFER, this->vertexAttribBuffer);
@@ -611,6 +600,7 @@ void init()
 	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo");
 	auto &armadillo = getRenderObject("armadillo");
 	armadillo.position = objCenter;
+	armadillo.program = &programs["arm"];
 	//ParseObj("bunny.obj");
 	// genRandomImage(300, 300);
 	readImage("hw2_support_files/skybox_texture_abandoned_village/front.png", "skybox");
@@ -630,15 +620,21 @@ void RenderObject::calculateModelMatrix(){
 	this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy * matRx;
 }
 
-void Geometry::drawModel()
+void RenderObject::drawModel()
 {
-	glUniformMatrix4fv(modelingMatrixLoc[activeProgramIndex], 1, GL_FALSE, glm::value_ptr(this->modelMatrix));
 
-	glBindVertexArray(this->vao);
-	glBindBuffer(GL_ARRAY_BUFFER, this->vertexAttribBuffer);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->indexBuffer);
+	// Set the active program and the values of its uniform variables
+	glUseProgram(program->program);
+	glUniformMatrix4fv(program->uniforms["modelingMatrix"], 1, GL_FALSE, glm::value_ptr(geometry.modelMatrix));
+	glUniformMatrix4fv(program->uniforms["projectionMatrix"], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+	glUniformMatrix4fv(program->uniforms["viewingMatrix"], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
+	glUniform3fv(program->uniforms["eyePos"], 1, glm::value_ptr(eyePos));
 
-	glDrawElements(GL_TRIANGLES, this->faces.size() * 3, GL_UNSIGNED_INT, 0);
+	glBindVertexArray(geometry.vao);
+	glBindBuffer(GL_ARRAY_BUFFER, geometry.vertexAttribBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, geometry.indexBuffer);
+
+	glDrawElements(GL_TRIANGLES, geometry.faces.size() * 3, GL_UNSIGNED_INT, 0);
 }
 
 
@@ -650,12 +646,6 @@ void display(){
 
 	skybox.draw();
 
-	// Set the active program and the values of its uniform variables
-	glUseProgram(gProgram[0]);
-	glUniformMatrix4fv(projectionMatrixLoc[0], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
-	glUniformMatrix4fv(viewingMatrixLoc[0], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
-	glUniform3fv(eyePosLoc[0], 1, glm::value_ptr(eyePos));
-
 	// Compute the modeling matrices
 	for(auto && o: rObjects){
 		o.calculateModelMatrix();
@@ -663,7 +653,7 @@ void display(){
 
 	// Draw the scene
 	for(auto && o: rObjects){
-		o.geometry.drawModel();
+		o.drawModel();
 	}
 
 }
@@ -822,6 +812,9 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
+	// no need to alias reflections
+	glfwWindowHint(GLFW_SAMPLES, 4);
+	glEnable(GL_MULTISAMPLE);
 	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
 	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
