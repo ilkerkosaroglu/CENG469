@@ -491,6 +491,19 @@ void loadTexture(Image& img){
 	glGenerateMipmap(GL_TEXTURE_2D);
 }
 
+void flipImageHorizontally(unsigned char* imageData, int width, int height, int numChannels) {
+    int rowStride = width * numChannels;
+    unsigned char* tempRow = new unsigned char[rowStride];
+
+    for (int y = 0; y < height / 2; y++) {
+        memcpy(tempRow, &imageData[y * rowStride], rowStride);
+        memcpy(&imageData[y * rowStride], &imageData[(height - y - 1) * rowStride], rowStride);
+        memcpy(&imageData[(height - y - 1) * rowStride], tempRow, rowStride);
+    }
+
+    delete[] tempRow;
+}
+
 void loadCubemap(vector<string> names){
 	textures["cubemap"] = ImgTexture();
 	ImgTexture &t = textures["cubemap"];
@@ -498,11 +511,21 @@ void loadCubemap(vector<string> names){
 	glGenTextures(1, &t.textureId);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, t.textureId);
 
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
 	for (int i = 0; i < names.size(); ++i){
 		Image &img = images[names[i]];
-		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, img.width, img.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img.data);
+		if (i == 0 || i == 1 || i == 4 || i == 5) {
+			// flipImageHorizontally(img.data, img.width, img.height, img.channels);
+		}		
+	glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, img.width, img.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img.data);
 	}
 	glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 }
 
 void genRandomImage(int width, int height){
@@ -528,14 +551,15 @@ void readImage(const char* path, string name, bool loadAsTex = true){
 		loadTexture(images[name]);
 	}
 }
-void readSkybox(string path){
-	readImage((path+"right.png").c_str(), "right", 0);
-	readImage((path+"left.png").c_str(), "left", 0);
-	readImage((path+"top.png").c_str(), "top", 0);
-	readImage((path+"bottom.png").c_str(), "bottom", 0);
-	readImage((path+"back.png").c_str(), "back", 0);
-	readImage((path+"front.png").c_str(), "front", 0);
-	loadCubemap({"right", "left", "top", "bottom", "back", "front"});
+void readSkybox(string path, string ext = "jpg"){
+	readImage((path + "right." + ext).c_str(), "right");
+	readImage((path + "left." + ext).c_str(), "left");
+	readImage((path + "top." + ext).c_str(), "top");
+	readImage((path + "bottom." + ext).c_str(), "bottom");
+	readImage((path + "back." + ext).c_str(), "back");
+	readImage((path + "front." + ext).c_str(), "front");
+
+	loadCubemap({"right", "left", "bottom", "top", "front", "back"});
 }
 class SkyBox: public Geometry{
 	public:
@@ -579,7 +603,7 @@ void SkyBox::init(){
 	this->faces.push_back(Face(vIndex, tIndex, nIndex));
 	this->initVBO();
 
-	readSkybox("hw2_support_files/skybox_texture_abandoned_village/");
+	readSkybox("hw2_support_files/skybox_texture_test/", "jpg");
 }
 SkyBox skybox;
 void init()
@@ -624,11 +648,6 @@ void display(){
 	glClearStencil(0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-	// Compute the modeling matrices
-	for(auto && o: rObjects){
-		o.calculateModelMatrix();
-	}
-
 	skybox.draw();
 
 	// Set the active program and the values of its uniform variables
@@ -636,6 +655,11 @@ void display(){
 	glUniformMatrix4fv(projectionMatrixLoc[0], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 	glUniformMatrix4fv(viewingMatrixLoc[0], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
 	glUniform3fv(eyePosLoc[0], 1, glm::value_ptr(eyePos));
+
+	// Compute the modeling matrices
+	for(auto && o: rObjects){
+		o.calculateModelMatrix();
+	}
 
 	// Draw the scene
 	for(auto && o: rObjects){
