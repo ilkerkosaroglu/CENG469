@@ -44,9 +44,10 @@ glm::mat4 modelingMatrix;
 
 float eyeRotX = 0;
 float eyeRotY = 0;
-glm::vec3 eyePos(0, 0, 0);
+glm::vec3 eyePos(0, 0, 0); // used with orbital controls, sent to shaders
+glm::vec3 eyePosActual(0, 3.f, 2.f); // set this eye position to move, used to calculate rotated eye pos.
 glm::vec3 orbitCenter = glm::vec3(0.f, 0.f, -7.0f);
-glm::vec3 objCenter = glm::vec3(-0.1f, -0.2f, -7.0f);
+glm::vec3 objCenter = glm::vec3(-0.1f, 1.06f, -7.0f);
 
 int activeProgramIndex = 0;
 
@@ -84,6 +85,23 @@ struct Face
 	GLuint vIndex[3], tIndex[3], nIndex[3];
 };
 
+class Image{
+	public:
+	string name;
+	int width, height, channels;
+	unsigned char *data;
+	Image(int width, int height, int channels, unsigned char *data, string name): width(width), height(height), channels(channels), data(data), name(name){}
+	Image(){}
+};
+
+class ImgTexture{
+	public:
+	GLuint textureId;
+};
+
+map<string, Image> images;
+map<string, ImgTexture> textures;
+
 class Uniform{
 	public:
 	string name;
@@ -101,7 +119,7 @@ class Geometry{
 	GLuint vao;
 	void initVBO();
 	GLuint vertexAttribBuffer, indexBuffer;
-	int vertexDataSizeInBytes, normalDataSizeInBytes;
+	int vertexDataSizeInBytes, normalDataSizeInBytes, textureDataSizeInBytes;
 	glm::mat4 modelMatrix = glm::mat4(1.0f);
 };
 
@@ -155,6 +173,26 @@ class Armadillo: public RenderObject{
 		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy * matRx;
 	}
 };
+class Ground: public RenderObject{
+	public:
+	Ground(){
+		program = &programs["ground"];
+		glUseProgram(program->program);
+		glUniform1i(program->uniforms["groundTexture"], 0);
+	}
+	void calculateModelMatrix(){
+		glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (-90. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
+		//scale
+		glm::mat4 scale = glm::scale(glm::mat4(1.0), glm::vec3(500.0, 500.0, 500.0));
+		this->geometry.modelMatrix = scale * matRx;
+	}
+	void updateUniforms(){
+		RenderObject::updateUniforms();
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, ::textures["ground"].textureId);
+		
+	}
+};
 
 shared_ptr<RenderObject> ParseObj(const string &fileName, const string &name, shared_ptr<RenderObject> obj)
 {
@@ -185,6 +223,10 @@ shared_ptr<RenderObject> ParseObj(const string &fileName, const string &name, sh
 					{
 						str >> tmp; // consume "vt"
 						str >> c1 >> c2;
+						// dbg("texture")
+						// dbg(c1);
+						// dbg(c2);
+						// dbg("pushing texture")
 						obj->geometry.textures.push_back(Texture(c1, c2));
 					}
 					else if (curLine[1] == 'n') // normal
@@ -325,7 +367,7 @@ GLuint createFS(const char* shaderName)
 	return fs;
 }
 
-Program& initShader(string name, string vert, string frag){
+Program& initShader(string name, string vert, string frag, vector<string> uniforms = {}){
 	// Create the program
 	GLuint prog = glCreateProgram();
 
@@ -357,14 +399,17 @@ Program& initShader(string name, string vert, string frag){
 	p.uniforms["viewingMatrix"] = glGetUniformLocation(prog, "viewingMatrix");
 	p.uniforms["projectionMatrix"] = glGetUniformLocation(prog, "projectionMatrix");
 	p.uniforms["eyePos"] = glGetUniformLocation(prog, "eyePos");
+	for (auto u : uniforms){
+		p.uniforms[u] = glGetUniformLocation(prog, u.c_str());
+	}
 	programs[name] = p;
 	return programs[name];
 }
 
 void initShaders(){
-	auto &skybox = initShader("skybox", "skyv.glsl", "skyf.glsl");
-	skybox.uniforms["skybox"] = glGetUniformLocation(skybox.program, "skybox");
-	auto &arm = initShader("arm", "vert.glsl", "frag.glsl");
+	initShader("skybox", "skyv.glsl", "skyf.glsl", {"skybox"});
+	initShader("arm", "vert.glsl", "frag.glsl");
+	initShader("ground", "groundv.glsl", "groundf.glsl", {"groundTexture"});
 }
 
 void Geometry::initVBO()
@@ -376,6 +421,7 @@ void Geometry::initVBO()
 
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
+	glEnableVertexAttribArray(2);
 	// assert(glGetError() == GL_NONE);
 
 	glGenBuffers(1, &this->vertexAttribBuffer);
@@ -390,14 +436,18 @@ void Geometry::initVBO()
 	dbg(vSize);
 	const int nSize = this->normals.size();
 	dbg(nSize);
+	const int tSize = this->textures.size();
+	dbg(tSize);
 	const int fSize = this->faces.size();
 	dbg(fSize);
 
 	this->vertexDataSizeInBytes = vSize * 3 * sizeof(GLfloat);
 	this->normalDataSizeInBytes = nSize * 3 * sizeof(GLfloat);
+	this->textureDataSizeInBytes = tSize * 3 * sizeof(GLfloat);
 	int indexDataSizeInBytes = fSize * 3 * sizeof(GLuint);
 	GLfloat *vertexData = new GLfloat[vSize * 3];
 	GLfloat *normalData = new GLfloat[nSize * 3];
+	GLfloat *uvData = new GLfloat[tSize * 3];
 	GLuint *indexData = new GLuint[fSize * 3];
 
 	float minX = 1e6, maxX = -1e6;
@@ -418,18 +468,23 @@ void Geometry::initVBO()
 		maxZ = std::max(maxZ, this->vertices[i].z);
 	}
 
-	std::cout << "minX = " << minX << std::endl;
-	std::cout << "maxX = " << maxX << std::endl;
-	std::cout << "minY = " << minY << std::endl;
-	std::cout << "maxY = " << maxY << std::endl;
-	std::cout << "minZ = " << minZ << std::endl;
-	std::cout << "maxZ = " << maxZ << std::endl;
+	// std::cout << "minX = " << minX << std::endl;
+	// std::cout << "maxX = " << maxX << std::endl;
+	// std::cout << "minY = " << minY << std::endl;
+	// std::cout << "maxY = " << maxY << std::endl;
+	// std::cout << "minZ = " << minZ << std::endl;
+	// std::cout << "maxZ = " << maxZ << std::endl;
 
 	for (int i = 0; i < nSize; ++i)
 	{
 		normalData[3 * i] = this->normals[i].x;
 		normalData[3 * i + 1] = this->normals[i].y;
 		normalData[3 * i + 2] = this->normals[i].z;
+	}
+	for (int i = 0; i < tSize; ++i)
+	{
+		uvData[2 * i] = this->textures[i].u;
+		uvData[2 * i + 1] = this->textures[i].v;
 	}
 
 	for (int i = 0; i < fSize; ++i)
@@ -440,36 +495,23 @@ void Geometry::initVBO()
 	}
 
 
-	glBufferData(GL_ARRAY_BUFFER, this->vertexDataSizeInBytes + this->normalDataSizeInBytes, 0, GL_STATIC_DRAW);
+
+	glBufferData(GL_ARRAY_BUFFER, this->vertexDataSizeInBytes + this->normalDataSizeInBytes + this->textureDataSizeInBytes, 0, GL_STATIC_DRAW);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, this->vertexDataSizeInBytes, vertexData);
 	glBufferSubData(GL_ARRAY_BUFFER, this->vertexDataSizeInBytes, this->normalDataSizeInBytes, normalData);
+	glBufferSubData(GL_ARRAY_BUFFER, this->vertexDataSizeInBytes + this->normalDataSizeInBytes, this->textureDataSizeInBytes, uvData);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexDataSizeInBytes, indexData, GL_STATIC_DRAW);
 
 	// done copying; can free now
 	delete[] vertexData;
 	delete[] normalData;
+	delete[] uvData;
 	delete[] indexData;
 
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(this->vertexDataSizeInBytes));
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(this->vertexDataSizeInBytes + this->normalDataSizeInBytes));
 }
-
-class Image{
-	public:
-	string name;
-	int width, height, channels;
-	unsigned char *data;
-	Image(int width, int height, int channels, unsigned char *data, string name): width(width), height(height), channels(channels), data(data), name(name){}
-	Image(){}
-};
-
-class ImgTexture{
-	public:
-	GLuint textureId;
-};
-
-map<string, Image> images;
-map<string, ImgTexture> textures;
 
 void loadTexture(Image& img){
 	textures[img.name] = ImgTexture();
@@ -489,6 +531,8 @@ void loadTexture(Image& img){
 	}
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img.width, img.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img.data);
 	glGenerateMipmap(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	cerr << "loaded texture " << img.name << " with id " << t.textureId << endl;
 }
 
 void loadCubemap(vector<string> names){
@@ -576,17 +620,21 @@ void SkyBox::init(){
 	this->faces.push_back(Face(vIndex, tIndex, nIndex));
 	this->initVBO();
 
-	readSkybox("hw2_support_files/skybox_texture_test/", "jpg");
+	readSkybox("hw2_support_files/skybox_texture_sea/", "jpg");
 }
 SkyBox skybox;
+
+/*** ----------------- INIT ------------------ */
 void init()
 {
 	initShaders();
 
-	auto armadillo = ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo", make_unique<Armadillo>());
+	readImage("hw2_support_files/ground_texture_sand.jpg", "ground");
+
+	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo", make_unique<Armadillo>());
+	ParseObj("hw2_support_files/obj/ground.obj", "ground", make_unique<Ground>());
 	//ParseObj("bunny.obj");
 	// genRandomImage(300, 300);
-	readImage("hw2_support_files/skybox_texture_abandoned_village/front.png", "skybox");
 
 	glEnable(GL_DEPTH_TEST);
 	for(auto & o: rObjects){
@@ -595,6 +643,7 @@ void init()
 
 	skybox.init();
 }
+/*** ----------------------------------------- */
 
 void RenderObject::calculateModelMatrix(){
 	this->geometry.modelMatrix = glm::mat4(1.0);
@@ -682,7 +731,7 @@ void setViewingMatrix()
 	glm::mat4 matR = matRy * matRx;
 
 	// use original because we don't reset the rotation to 0 after rotating. (so that it doesn't accumulate)
-	auto origEyePos = glm::vec3(0.0, 0.0, 0.0);
+	auto origEyePos = eyePosActual;
 	glm::mat4 matIT = glm::translate(glm::mat4(1.0), -orbitCenter);
 	glm::mat4 matT = glm::translate(glm::mat4(1.0), orbitCenter);
 	auto newEyePos4 = matT * matR * matIT * glm::vec4(origEyePos, 1.0);
