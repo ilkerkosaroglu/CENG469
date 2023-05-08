@@ -7,6 +7,7 @@
 #include <sstream>
 #include <vector>
 #include <map>
+#include <memory>
 #define _USE_MATH_DEFINES
 #include <math.h>
 #include <GL/glew.h>
@@ -127,27 +128,40 @@ class RenderObject{
 	string name;
 	map<string, float> props;
 	glm::vec3 position;
-	void calculateModelMatrix();
+	virtual void calculateModelMatrix();
 	void drawModel();
+	virtual void updateUniforms();
 };
 
-vector<RenderObject> rObjects;
-RenderObject& getRenderObject(const string& name){
+vector< shared_ptr < RenderObject > > rObjects;
+shared_ptr<RenderObject>& getRenderObject(const string& name){
 	for(auto& obj: rObjects){
-		if(obj.name == name){
+		if(obj->name == name){
 			return obj;
 		}
 	}
 	throw "RenderObject not found";
 }
 
-bool ParseObj(const string& fileName, const string& name)
+class Armadillo: public RenderObject{
+	public:
+	Armadillo(){
+		program = &programs["arm"];
+		position = objCenter;
+	}
+	void calculateModelMatrix(){
+		glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (0. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
+		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-180. / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
+		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy * matRx;
+	}
+};
+
+shared_ptr<RenderObject> ParseObj(const string &fileName, const string &name, shared_ptr<RenderObject> obj)
 {
 	fstream myfile;
 
-	rObjects.emplace_back();
-	auto &obj = rObjects.back();
-	obj.name = name;
+	rObjects.push_back(obj);
+	obj->name = name;
 
 	// Open the input 
 	myfile.open(fileName.c_str(), std::ios::in);
@@ -171,19 +185,19 @@ bool ParseObj(const string& fileName, const string& name)
 					{
 						str >> tmp; // consume "vt"
 						str >> c1 >> c2;
-						obj.geometry.textures.push_back(Texture(c1, c2));
+						obj->geometry.textures.push_back(Texture(c1, c2));
 					}
 					else if (curLine[1] == 'n') // normal
 					{
 						str >> tmp; // consume "vn"
 						str >> c1 >> c2 >> c3;
-						obj.geometry.normals.push_back(Normal(c1, c2, c3));
+						obj->geometry.normals.push_back(Normal(c1, c2, c3));
 					}
 					else // vertex
 					{
 						str >> tmp; // consume "v"
 						str >> c1 >> c2 >> c3;
-						obj.geometry.vertices.push_back(Vertex(c1, c2, c3));
+						obj->geometry.vertices.push_back(Vertex(c1, c2, c3));
 					}
 				}
 				else if (curLine[0] == 'f') // face
@@ -210,7 +224,7 @@ bool ParseObj(const string& fileName, const string& name)
 						tIndex[c] -= 1;
 					}
 
-					obj.geometry.faces.push_back(Face(vIndex, tIndex, nIndex));
+					obj->geometry.faces.push_back(Face(vIndex, tIndex, nIndex));
 				}
 				else
 				{
@@ -226,12 +240,9 @@ bool ParseObj(const string& fileName, const string& name)
 		}
 
 		myfile.close();
+		return obj;
 	}
-	else
-	{
-		return false;
-	}
-	return true;
+	throw "Parse obj error";
 }
 ///< [in]  Name of the shader file
 ///< [out] The contents of the file
@@ -480,19 +491,6 @@ void loadTexture(Image& img){
 	glGenerateMipmap(GL_TEXTURE_2D);
 }
 
-void flipImageHorizontally(unsigned char* imageData, int width, int height, int numChannels) {
-    int rowStride = width * numChannels;
-    unsigned char* tempRow = new unsigned char[rowStride];
-
-    for (int y = 0; y < height / 2; y++) {
-        memcpy(tempRow, &imageData[y * rowStride], rowStride);
-        memcpy(&imageData[y * rowStride], &imageData[(height - y - 1) * rowStride], rowStride);
-        memcpy(&imageData[(height - y - 1) * rowStride], tempRow, rowStride);
-    }
-
-    delete[] tempRow;
-}
-
 void loadCubemap(vector<string> names){
 	textures["cubemap"] = ImgTexture();
 	ImgTexture &t = textures["cubemap"];
@@ -507,25 +505,11 @@ void loadCubemap(vector<string> names){
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
 	for (int i = 0; i < names.size(); ++i){
-		Image &img = images[names[i]];
-		if (i == 0 || i == 1 || i == 4 || i == 5) {
-			// flipImageHorizontally(img.data, img.width, img.height, img.channels);
-		}		
-	glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, img.width, img.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img.data);
+		Image &img = images[names[i]];	
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, img.width, img.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img.data);
 	}
 	glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
 	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
-}
-
-void genRandomImage(int width, int height){
-	unsigned char *image = new unsigned char[width * height * 3];
-	for (int i = 0; i < width * height; ++i){
-		image[i] = rand() % 256;
-		image[i+1] = 0;
-		image[i+2] = 0;
-	}
-	images["random"] = Image(width, height, 3, image, "random");
-	loadTexture(images["random"]);
 }
 
 void readImage(const char* path, string name, bool loadAsTex = true){
@@ -597,38 +581,39 @@ void SkyBox::init(){
 SkyBox skybox;
 void init()
 {
-	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo");
-	auto &armadillo = getRenderObject("armadillo");
-	armadillo.position = objCenter;
-	armadillo.program = &programs["arm"];
+	initShaders();
+
+	auto armadillo = ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo", make_unique<Armadillo>());
 	//ParseObj("bunny.obj");
 	// genRandomImage(300, 300);
 	readImage("hw2_support_files/skybox_texture_abandoned_village/front.png", "skybox");
 
 	glEnable(GL_DEPTH_TEST);
-	initShaders();
-	for(auto && o: rObjects){
-		o.geometry.initVBO();
+	for(auto & o: rObjects){
+		o->geometry.initVBO();
 	}
 
 	skybox.init();
 }
 
 void RenderObject::calculateModelMatrix(){
-	glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (0. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
-	glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-180. / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
-	this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy * matRx;
+	this->geometry.modelMatrix = glm::mat4(1.0);
 }
 
-void RenderObject::drawModel()
-{
-
-	// Set the active program and the values of its uniform variables
-	glUseProgram(program->program);
+void RenderObject::updateUniforms(){
 	glUniformMatrix4fv(program->uniforms["modelingMatrix"], 1, GL_FALSE, glm::value_ptr(geometry.modelMatrix));
 	glUniformMatrix4fv(program->uniforms["projectionMatrix"], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 	glUniformMatrix4fv(program->uniforms["viewingMatrix"], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
 	glUniform3fv(program->uniforms["eyePos"], 1, glm::value_ptr(eyePos));
+}
+
+void RenderObject::drawModel()
+{
+	// Set the active program 
+	glUseProgram(program->program);
+
+	// and the values of its uniform variables
+	updateUniforms();
 
 	glBindVertexArray(geometry.vao);
 	glBindBuffer(GL_ARRAY_BUFFER, geometry.vertexAttribBuffer);
@@ -647,13 +632,13 @@ void display(){
 	skybox.draw();
 
 	// Compute the modeling matrices
-	for(auto && o: rObjects){
-		o.calculateModelMatrix();
+	for(auto o: rObjects){
+		o->calculateModelMatrix();
 	}
 
 	// Draw the scene
-	for(auto && o: rObjects){
-		o.drawModel();
+	for(auto o: rObjects){
+		o->drawModel();
 	}
 
 }
