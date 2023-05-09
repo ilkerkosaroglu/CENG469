@@ -8,11 +8,11 @@
 
 vec3 I = vec3(1, 1, 1);          // point light intensity
 vec3 Iamb = vec3(0.8, 0.8, 0.8); // ambient light intensity
-vec3 kd = vec3(1, 0.2, 0.2);     // diffuse reflectance coefficient
+vec3 kd = vec3(0.2, 0.2, 0.3);     // diffuse reflectance coefficient
 vec3 ka = vec3(0.3, 0.3, 0.3);   // ambient reflectance coefficient
-vec3 ks = vec3(0.8, 0.8, 0.8);   // specular reflectance coefficient
 vec3 lightPos = vec3(5, 5, 5);   // light position in world coordinates
 
+uniform samplerCube skybox;
 uniform vec3 eyePos;
 
 in vec4 fragWorldPos;
@@ -35,8 +35,14 @@ void main(void)
 	float NdotH = dot(N, H); // for specular component
 
 	vec3 diffuseColor = I * kd * max(0, NdotL);
-	vec3 specularColor = I * ks * pow(max(0, NdotH), 100);
 	vec3 ambientColor = Iamb * ka;
 
-	fragColor = vec4(diffuseColor + specularColor + ambientColor, 1);
+	fragColor = vec4(diffuseColor + ambientColor, 1);
+	vec3 reflectDir = reflect(-V, N);
+	reflectDir.y *= -1;
+	reflectDir.z *= -1;
+
+	// fragColor = vec4(reflectDir, 1);
+	// fragColor = vec4(texture(skybox, reflectDir).xyz, 1);
+	fragColor = mix(fragColor, texture(skybox, reflectDir), 0.3);
 }

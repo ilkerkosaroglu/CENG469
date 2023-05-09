@@ -42,7 +42,6 @@ glm::mat4 modelingMatrix;
 float eyeRotX = 0;
 float eyeRotY = 0;
 glm::vec3 eyePos(0, 0, 0); // used with orbital controls, sent to shaders
-glm::vec3 eyePosDiffOriginal(0, 5.f, 14.f);
 glm::vec3 eyePosDiff(0, 5.f, 14.f);
 glm::vec3 objCenter = glm::vec3(-0.1f, 1.06f, -7.0f);
 glm::vec3 eyePosActual = objCenter+eyePosDiff; // set this eye position to move, used to calculate rotated eye pos.
@@ -175,7 +174,8 @@ class Armadillo: public RenderObject{
 	void calculateModelMatrix(){
 		glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (0. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
 		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-180. / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
-		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy * matRx;
+		glm::mat4 scale = glm::scale(glm::mat4(1.0), glm::vec3(5.0, 5.0, 5.0));
+		this->geometry.modelMatrix = scale * glm::translate(glm::mat4(1.0), this->position) * matRy * matRx;
 	}
 };
 class Ground: public RenderObject{
@@ -224,7 +224,7 @@ class TeslaBody: public RenderObject{
 			props["speed"] = (abs(speed)/speed)*1.0;
 		}
 		position = objCenter;
-		eyePosActual = objCenter + eyePosDiffOriginal;
+		eyePosActual = objCenter + eyePosDiff;
 		eyeRotX += 180-angle;
 		setViewingMatrix();
 		eyeRotX -= 180-angle;
@@ -236,7 +236,8 @@ class TeslaBody: public RenderObject{
 	}
 	void updateUniforms(){
 		RenderObject::updateUniforms();
-
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, ::textures["cubemap"].textureId);
 	}
 };
 
@@ -904,6 +905,11 @@ void mouseButton(GLFWwindow* window, int button, int action, int mods)
 	}
 }
 
+void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
+{
+	eyePosDiff *= (1.0 - yoffset / 10.0);
+}
+
 void debugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)
 {
 	printf("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s",
@@ -972,6 +978,7 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 
 	glfwSetKeyCallback(window, keyboard);
 	glfwSetMouseButtonCallback(window, mouseButton);
+	glfwSetScrollCallback(window, scroll_callback);
 	glfwSetWindowSizeCallback(window, reshape);
 
 	reshape(window, width, height); // need to call this once ourselves
