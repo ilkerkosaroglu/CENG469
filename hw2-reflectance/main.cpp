@@ -43,6 +43,7 @@ glm::vec3 eyePos(0, 0, 0); // used with orbital controls, sent to shaders
 glm::vec3 eyePosActual(0, 5.f, 7.f); // set this eye position to move, used to calculate rotated eye pos.
 glm::vec3 orbitCenter = glm::vec3(0.f, 0.f, -7.0f);
 glm::vec3 objCenter = glm::vec3(-0.1f, 1.06f, -7.0f);
+glm::vec3 armCenter = glm::vec3(-0.1f, 1.06f, -7.0f);
 
 int activeProgramIndex = 0;
 
@@ -141,6 +142,9 @@ class RenderObject{
 	string name;
 	map<string, float> props;
 	glm::vec3 position;
+	virtual void update(){
+		return;
+	}
 	virtual void calculateModelMatrix();
 	void drawModel();
 	virtual void updateUniforms();
@@ -160,7 +164,7 @@ class Armadillo: public RenderObject{
 	public:
 	Armadillo(){
 		program = &programs["arm"];
-		position = objCenter;
+		position = armCenter;
 	}
 	void calculateModelMatrix(){
 		glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (0. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
@@ -192,7 +196,34 @@ class TeslaBody: public RenderObject{
 	public:
 	TeslaBody(){
 		program = &programs["tesla"];
+		props["speed"] = 0.0;
+		props["angle"] = 180.0;
 		// position = objCenter;
+	}
+	void update(){
+		float speed = props["speed"];
+		float angle = props["angle"];
+		objCenter.x += speed * sin((-angle / 180.) * M_PI);
+		objCenter.z += speed * cos((-angle / 180.) * M_PI);
+		const float friction = 0.01;
+		if(speed>0){
+			props["speed"] -= friction;
+		}else{
+			props["speed"] += friction;
+		}
+		if(abs(speed) < 2*friction){
+			props["speed"] = 0.0;
+		}
+		position = objCenter;
+	}
+	void calculateModelMatrix(){
+		float angle = props["angle"];
+		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-angle / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
+		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy;
+	}
+	void updateUniforms(){
+		RenderObject::updateUniforms();
+
 	}
 };
 
@@ -272,7 +303,7 @@ shared_ptr<RenderObject> ParseObj(const string &fileName, const string &name, sh
 				}
 				else
 				{
-					cout << "Ignoring unidentified line in obj file: " << curLine << endl;
+					// cout << "Ignoring unidentified line in obj file: " << curLine << endl;
 				}
 			}
 
@@ -412,6 +443,7 @@ void initShaders(){
 	initShader("skybox", "skyv.glsl", "skyf.glsl", {"skybox"});
 	initShader("arm", "vert.glsl", "frag.glsl");
 	initShader("ground", "groundv.glsl", "groundf.glsl", {"groundTexture"});
+	initShader("tesla", "bodyv.glsl", "bodyf.glsl", {});
 }
 
 void Geometry::initVBO()
@@ -435,13 +467,13 @@ void Geometry::initVBO()
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->indexBuffer);
 
 	const int vSize = this->vertices.size();
-	dbg(vSize);
+	// dbg(vSize);
 	const int nSize = this->normals.size();
-	dbg(nSize);
+	// dbg(nSize);
 	const int tSize = this->textures.size();
-	dbg(tSize);
+	// dbg(tSize);
 	const int fSize = this->faces.size();
-	dbg(fSize);
+	// dbg(fSize);
 
 	this->vertexDataSizeInBytes = vSize * 3 * sizeof(GLfloat);
 	this->normalDataSizeInBytes = nSize * 3 * sizeof(GLfloat);
@@ -566,7 +598,7 @@ void readImage(const char* path, string name, bool loadAsTex = true){
 	if (!image){
 		std::cout << "Failed to load image" << std::endl;
 	}else{
-		cout<<"loaded image "<<name<<" with "<<w<<" "<<h<<" "<<c<<endl;
+		// cout<<"loaded image "<<name<<" with "<<w<<" "<<h<<" "<<c<<endl;
 		images[name] = Image(w, h, c, image, name);
 		if(loadAsTex)
 		loadTexture(images[name]);
@@ -641,7 +673,7 @@ void init()
 
 	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo", make_unique<Armadillo>());
 	ParseObj("hw2_support_files/obj/ground.obj", "ground", make_unique<Ground>());
-	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_body.obj", "TeslaBody", make_unique<TeslaBody>());
+	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_body.obj", "TeslaBody", make_unique<TeslaBody>());
 	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_tires.obj", "TeslaWheels", make_unique<TeslaWheels>());
 	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_windows.obj", "TeslaWindows", make_unique<TeslaWindows>());
 	//ParseObj("bunny.obj");
@@ -672,6 +704,12 @@ void RenderObject::drawModel()
 	// Set the active program 
 	glUseProgram(program->program);
 
+	// call general update
+	update();
+
+	// update the model matrix of the object
+	calculateModelMatrix();
+
 	// and the values of its uniform variables
 	updateUniforms();
 
@@ -691,11 +729,6 @@ void display(){
 
 	skybox.draw();
 
-	// Compute the modeling matrices
-	for(auto o: rObjects){
-		o->calculateModelMatrix();
-	}
-
 	// Draw the scene
 	for(auto o: rObjects){
 		o->drawModel();
@@ -703,24 +736,53 @@ void display(){
 
 }
 
+map<int, bool> pressed;
+// bool shouldDoAction(int queryKey, int key, int action){
+// 	if(queryKey == key && action == GLFW_PRESS){
+// 		return true;
+// 	}
+// 	if(action == GLFW_REPEAT || action == GLFW_PRESS){
+// 		if(pressed.find(queryKey) == pressed.end()){
+// 			return false;
+// 		}
+// 		return pressed[queryKey];
+// 	}
+// 	return false;
+// }
 void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods){
 	if (key == GLFW_KEY_Q && action == GLFW_PRESS)
 	{
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 	}
-	else if (key == GLFW_KEY_G && action == GLFW_PRESS)
-	{
-		//glShadeModel(GL_SMOOTH);
-		activeProgramIndex = 0;
+	if(action == GLFW_PRESS){
+		pressed[key] = true;
 	}
-	else if (key == GLFW_KEY_P && action == GLFW_PRESS)
-	{
-		//glShadeModel(GL_SMOOTH);
-		activeProgramIndex = 1;
+	if(action == GLFW_RELEASE){
+		pressed[key] = false;
 	}
-	else if (key == GLFW_KEY_F && action == GLFW_PRESS)
+}
+bool shouldDoAction(int key){
+	if(pressed.find(key) == pressed.end()){
+		return false;
+	}
+	return pressed[key];
+}
+void calcInteractions(){
+	if (shouldDoAction(GLFW_KEY_W))
 	{
-		//glShadeModel(GL_FLAT);
+		getRenderObject("TeslaBody")->props["speed"] += 0.015;
+	}
+	if (shouldDoAction(GLFW_KEY_S))
+	{
+		getRenderObject("TeslaBody")->props["speed"] -= 0.015;
+	}
+	if (shouldDoAction(GLFW_KEY_A))
+	{
+		getRenderObject("TeslaBody")->props["angle"] -= 1.0;
+	}
+	if (shouldDoAction(GLFW_KEY_D))
+	{
+		getRenderObject("TeslaBody")->props["angle"] += 1.0;
 	}
 }
 
@@ -728,6 +790,7 @@ void mainLoop(GLFWwindow* window)
 {
 	while (!glfwWindowShouldClose(window))
 	{
+		calcInteractions();
 		display();
 		glfwSwapBuffers(window);
 		glfwPollEvents();
