@@ -262,8 +262,20 @@ class TeslaWheels: public RenderObject{
 		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-angle / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
 		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy;
 	}
-	void updateUniforms(){
-		RenderObject::updateUniforms();
+};
+
+class TeslaWindows: public RenderObject{
+	public:
+	TeslaWindows(){
+		program = &programs["windows"];
+	}
+	void update(){
+		position = getRenderObject("TeslaBody")->position;
+	}
+	void calculateModelMatrix(){
+		float angle = getRenderObject("TeslaBody")->props["angle"];
+		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-angle / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
+		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy;
 	}
 };
 
@@ -485,6 +497,7 @@ void initShaders(){
 	initShader("ground", "groundv.glsl", "groundf.glsl", {"groundTexture"});
 	initShader("tesla", "bodyv.glsl", "bodyf.glsl", {"matcap", "skybox"});
 	initShader("wheels", "wv.glsl", "wf.glsl", {});
+	initShader("windows", "windowv.glsl", "windowf.glsl", {"skybox"});
 }
 
 void Geometry::initVBO()
@@ -711,14 +724,14 @@ void init()
 	initShaders();
 
 	readImage("hw2_support_files/ground_texture_sand.jpg", "ground");
-	readImage("hw2_support_files/matcapblack.jpg", "matcapblack");
+	readImage("hw2_support_files/gray.jpg", "matcapblack");
 	readImage("hw2_support_files/soft_clay.jpg", "clay");
 
-	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_body.obj", "TeslaBody", make_unique<TeslaBody>());
-	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_tires.obj", "TeslaWheels", make_unique<TeslaWheels>());
 	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo", make_unique<Armadillo>());
 	ParseObj("hw2_support_files/obj/ground.obj", "ground", make_unique<Ground>());
-	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_windows.obj", "TeslaWindows", make_unique<TeslaWindows>());
+	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_body.obj", "TeslaBody", make_unique<TeslaBody>());
+	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_tires.obj", "TeslaWheels", make_unique<TeslaWheels>());
+	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_windows.obj", "TeslaWindows", make_unique<TeslaWindows>());
 	//ParseObj("bunny.obj");
 	// genRandomImage(300, 300);
 

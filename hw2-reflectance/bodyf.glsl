@@ -24,5 +24,16 @@ void main(void)
 	// fragColor = vec4(texture(skybox, reflectDir).xyz, 1);
 	reflectDir.y *= -1;
 	reflectDir.z *= -1;
-	fragColor = mix(mccolor, texture(skybox, reflectDir), 0.3);
+	int i,j;
+	vec4 blurColor = vec4(0);
+	for(i=0;i<3;i++)
+	{
+		for(j=0;j<3;j++)
+		{
+			blurColor += texture(skybox, reflectDir + vec3(i-1, j-1, 0) * 0.01);
+		}
+	}
+	blurColor /= 9.0;
+	fragColor = mccolor;
+	fragColor = mix(mccolor, blurColor, 0.3);
 }
