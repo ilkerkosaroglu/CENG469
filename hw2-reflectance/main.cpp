@@ -893,9 +893,17 @@ map<int, bool> pressed;
 // 	return false;
 // }
 void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods){
-	if (key == GLFW_KEY_Q && action == GLFW_PRESS)
-	{
-		glfwSetWindowShouldClose(window, GLFW_TRUE);
+	if (key == GLFW_KEY_Q && action == GLFW_PRESS){
+		eyeRotX = -90;
+	}
+	if (key == GLFW_KEY_E && action == GLFW_PRESS){
+		eyeRotX = 90;
+	}
+	if (key == GLFW_KEY_R && action == GLFW_PRESS){
+		eyeRotX = 0;
+	}
+	if (key == GLFW_KEY_T && action == GLFW_PRESS){
+		eyeRotX = 180;
 	}
 	if(action == GLFW_PRESS){
 		pressed[key] = true;
