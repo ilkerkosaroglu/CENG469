@@ -16,7 +16,7 @@ void main(void)
 
 	vec3 reflectDir = reflect(-V, N);
 
-	float m = 2.8284271247461903 * sqrt( reflectDir.z+1.0 );
+	float m = 2.8284271247461903 * sqrt( reflectDir.z+1.01 );
 	vec2 mcuv = reflectDir.xy / m + 0.5;
 	vec4 mccolor = vec4(texture(matcap, mcuv).xyz,1);
 
@@ -25,15 +25,17 @@ void main(void)
 	reflectDir.y *= -1;
 	reflectDir.z *= -1;
 	int i,j;
-	vec4 blurColor = vec4(0);
-	for(i=0;i<3;i++)
-	{
-		for(j=0;j<3;j++)
-		{
-			blurColor += texture(skybox, reflectDir + vec3(i-1, j-1, 0) * 0.01);
-		}
-	}
-	blurColor /= 9.0;
+	// vec4 blurColor = vec4(0);
+	// for(i=0;i<3;i++)
+	// {
+	// 	for(j=0;j<3;j++)
+	// 	{
+	// 		blurColor += texture(skybox, normalize(reflectDir + vec3(i-1, j-1, i+j) * 0.01));
+	// 	}
+	// }
+	// blurColor /= 9.0;
+	// fragColor = vec4(0,0,0,1);
 	fragColor = mccolor;
-	fragColor = mix(mccolor, blurColor, 0.3);
+	// fragColor = mix(mccolor, blurColor, 0.3);
+	// fragColor = mix(mccolor, texture(skybox, reflectDir), 0.3);
 }

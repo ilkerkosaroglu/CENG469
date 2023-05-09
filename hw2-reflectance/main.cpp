@@ -32,10 +32,11 @@ using namespace std;
 
 int gWidth, gHeight;
 
+const int ENV_RES = 1024;
+
 void setViewingMatrix();
 
 glm::mat4 projectionMatrix;
-glm::mat4 projectionMatrix90;
 glm::mat4 viewingMatrix;
 glm::mat4 modelingMatrix;
 
@@ -240,7 +241,7 @@ class TeslaBody: public RenderObject{
 	void updateUniforms(){
 		RenderObject::updateUniforms();
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_CUBE_MAP, ::textures["cubemap"].textureId);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, ::textures["envmap"].textureId);
 		glActiveTexture(GL_TEXTURE1);
 		glBindTexture(GL_TEXTURE_2D, ::textures["matcapblack"].textureId);
 		// glActiveTexture(GL_TEXTURE0);
@@ -276,6 +277,12 @@ class TeslaWindows: public RenderObject{
 		float angle = getRenderObject("TeslaBody")->props["angle"];
 		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-angle / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
 		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy;
+	}
+	void updateUniforms(){
+		RenderObject::updateUniforms();
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, ::textures["envmap"].textureId);
+		glUniform1i(program->uniforms["skybox"], 0);
 	}
 };
 
@@ -658,6 +665,38 @@ void readImage(const char* path, string name, bool loadAsTex = true){
 		loadTexture(images[name]);
 	}
 }
+GLuint fbo;
+
+void initEnvMapTexture(){
+	textures["envmap"] = ImgTexture();
+	ImgTexture &t = textures["envmap"];
+
+	glGenTextures(1, &t.textureId);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, t.textureId);
+
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+	for (int i = 0; i < 6; ++i){
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X+i, 0, GL_RGB, ENV_RES, ENV_RES, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	}
+
+	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+
+
+	glGenFramebuffers(1, &fbo);
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+	// attach a depth buffer texture to fix weird artifacts
+	textures["depth"] = ImgTexture();
+	ImgTexture &d = textures["depth"];
+	glGenTextures(1, &d.textureId);
+	glBindTexture(GL_TEXTURE_2D, d.textureId);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, ENV_RES, ENV_RES, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, NULL);
+
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, d.textureId, 0);
+}
+
 void readSkybox(string path, string ext = "jpg"){
 	readImage((path + "right." + ext).c_str(), "right");
 	readImage((path + "left." + ext).c_str(), "left");
@@ -727,6 +766,8 @@ void init()
 	readImage("hw2_support_files/gray.jpg", "matcapblack");
 	readImage("hw2_support_files/soft_clay.jpg", "clay");
 
+	initEnvMapTexture();
+
 	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo", make_unique<Armadillo>());
 	ParseObj("hw2_support_files/obj/ground.obj", "ground", make_unique<Ground>());
 	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_body.obj", "TeslaBody", make_unique<TeslaBody>());
@@ -777,11 +818,57 @@ void RenderObject::drawModel()
 }
 
 
+void drawEnvMap(){
+	vector<glm::mat4> vMs = {
+		// right, left, bottom, top, front, back
+		glm::lookAt(objCenter, objCenter + glm::vec3( 1, 0, 0), glm::vec3(0, 1, 0)),
+		glm::lookAt(objCenter, objCenter + glm::vec3(-1, 0, 0), glm::vec3(0, 1, 0)),
+		glm::lookAt(objCenter, objCenter + glm::vec3( 0,-1, 0), glm::vec3(0, 0,-1)),
+		glm::lookAt(objCenter, objCenter + glm::vec3( 0, 1, 0), glm::vec3(0, 0, 1)),
+		glm::lookAt(objCenter, objCenter + glm::vec3( 0, 0,-1), glm::vec3(0, 1, 0)),
+		glm::lookAt(objCenter, objCenter + glm::vec3( 0, 0, 1), glm::vec3(0, 1, 0)),
+	};
+	ImgTexture &t = textures["envmap"];
+	glBindTexture(GL_TEXTURE_CUBE_MAP, t.textureId);
+
+	glViewport(0, 0, ENV_RES, ENV_RES);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+	auto prevVM = viewingMatrix;
+	auto prevPM = projectionMatrix;
+	projectionMatrix = glm::perspective((float)((90.0 / 180.0) * M_PI), 1.0f, 1.0f, 300.0f);;
+	for (int i = 0; i < 6; ++i) {
+
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, t.textureId, 0);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		viewingMatrix = vMs[i];
+
+		skybox.draw();
+		for(auto o: rObjects){
+			if (o->name.compare("TeslaBody")!=0 && o->name.compare("TeslaWheels")!=0 && o->name.compare("TeslaWindows")!=0){
+
+				o->drawModel();
+			}else{
+				// dbg(o->name);
+			}
+		}
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glViewport(0, 0, gWidth, gHeight);
+	viewingMatrix = prevVM;
+	projectionMatrix = prevPM;
+}
+
 void display(){
 	glClearColor(0, 0, 0, 1);
 	glClearDepth(1.0f);
 	glClearStencil(0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	// draw envmap centering the car (objCenter)
+	drawEnvMap();
 
 	skybox.draw();
 
@@ -902,7 +989,6 @@ void reshape(GLFWwindow *window, int w, int h)
 
 	float fovyRad = (float)(45.0 / 180.0) * M_PI;
 	projectionMatrix = glm::perspective(fovyRad, w / (float)h, 1.0f, 300.0f);
-	projectionMatrix90 = glm::perspective((float)((90.0 / 180.0) * M_PI), w / (float)h, 1.0f, 100.0f);
 
 	// Assume default camera position and orientation (camera is at
 	// (0, 0, 0) with looking at -z direction and its up vector pointing
@@ -958,9 +1044,11 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
 
 void debugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)
 {
+	if(GL_DEBUG_TYPE_ERROR != type)return;
 	printf("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s",
 		   (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
 		   type, severity, message);
+	cout << endl;
 	cout << "GL_DEBUG_TYPE_ERROR:" << (GL_DEBUG_TYPE_ERROR == type) << std::endl;
 	cout << "GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:" << (GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR == type) << std::endl;
 	cout << "GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:" << (GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR == type) << std::endl;
