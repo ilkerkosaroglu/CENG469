@@ -177,6 +177,12 @@ class Armadillo: public RenderObject{
 		glm::mat4 scale = glm::scale(glm::mat4(1.0), glm::vec3(5.0, 5.0, 5.0));
 		this->geometry.modelMatrix = scale * glm::translate(glm::mat4(1.0), this->position) * matRy * matRx;
 	}
+	void updateUniforms(){
+		RenderObject::updateUniforms();
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, ::textures["clay"].textureId);
+		glUniform1i(program->uniforms["matcap"], 0);
+	}
 };
 class Ground: public RenderObject{
 	public:
@@ -225,9 +231,6 @@ class TeslaBody: public RenderObject{
 		}
 		position = objCenter;
 		eyePosActual = objCenter + eyePosDiff;
-		eyeRotX += 180-angle;
-		setViewingMatrix();
-		eyeRotX -= 180-angle;
 	}
 	void calculateModelMatrix(){
 		float angle = props["angle"];
@@ -238,6 +241,29 @@ class TeslaBody: public RenderObject{
 		RenderObject::updateUniforms();
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, ::textures["cubemap"].textureId);
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, ::textures["matcapblack"].textureId);
+		// glActiveTexture(GL_TEXTURE0);
+		glUniform1i(program->uniforms["skybox"], 0);
+		glUniform1i(program->uniforms["matcap"], 1);
+	}
+};
+
+class TeslaWheels: public RenderObject{
+	public:
+	TeslaWheels(){
+		program = &programs["wheels"];
+	}
+	void update(){
+		position = getRenderObject("TeslaBody")->position;
+	}
+	void calculateModelMatrix(){
+		float angle = getRenderObject("TeslaBody")->props["angle"];
+		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-angle / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
+		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy;
+	}
+	void updateUniforms(){
+		RenderObject::updateUniforms();
 	}
 };
 
@@ -455,9 +481,10 @@ Program& initShader(string name, string vert, string frag, vector<string> unifor
 
 void initShaders(){
 	initShader("skybox", "skyv.glsl", "skyf.glsl", {"skybox"});
-	initShader("arm", "vert.glsl", "frag.glsl");
+	initShader("arm", "vert.glsl", "frag.glsl", {"matcap"});
 	initShader("ground", "groundv.glsl", "groundf.glsl", {"groundTexture"});
-	initShader("tesla", "bodyv.glsl", "bodyf.glsl", {});
+	initShader("tesla", "bodyv.glsl", "bodyf.glsl", {"matcap", "skybox"});
+	initShader("wheels", "wv.glsl", "wf.glsl", {});
 }
 
 void Geometry::initVBO()
@@ -684,11 +711,13 @@ void init()
 	initShaders();
 
 	readImage("hw2_support_files/ground_texture_sand.jpg", "ground");
+	readImage("hw2_support_files/matcapblack.jpg", "matcapblack");
+	readImage("hw2_support_files/soft_clay.jpg", "clay");
 
 	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_body.obj", "TeslaBody", make_unique<TeslaBody>());
+	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_tires.obj", "TeslaWheels", make_unique<TeslaWheels>());
 	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo", make_unique<Armadillo>());
 	ParseObj("hw2_support_files/obj/ground.obj", "ground", make_unique<Ground>());
-	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_tires.obj", "TeslaWheels", make_unique<TeslaWheels>());
 	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_windows.obj", "TeslaWindows", make_unique<TeslaWindows>());
 	//ParseObj("bunny.obj");
 	// genRandomImage(300, 300);
@@ -798,6 +827,10 @@ void calcInteractions(){
 	{
 		getRenderObject("TeslaBody")->props["angle"] += 2.0;
 	}
+	float angle = getRenderObject("TeslaBody")->props["angle"];
+	eyeRotX += 180 - angle;
+	setViewingMatrix();
+	eyeRotX -= 180 - angle;
 }
 
 void mainLoop(GLFWwindow* window)
@@ -855,7 +888,7 @@ void reshape(GLFWwindow *window, int w, int h)
 	// Use perspective projection
 
 	float fovyRad = (float)(45.0 / 180.0) * M_PI;
-	projectionMatrix = glm::perspective(fovyRad, w / (float)h, 1.0f, 100.0f);
+	projectionMatrix = glm::perspective(fovyRad, w / (float)h, 1.0f, 300.0f);
 	projectionMatrix90 = glm::perspective((float)((90.0 / 180.0) * M_PI), w / (float)h, 1.0f, 100.0f);
 
 	// Assume default camera position and orientation (camera is at

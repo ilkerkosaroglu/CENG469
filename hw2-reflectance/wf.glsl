@@ -8,14 +8,12 @@
 
 vec3 I = vec3(1, 1, 1);          // point light intensity
 vec3 Iamb = vec3(0.8, 0.8, 0.8); // ambient light intensity
-vec3 kd = vec3(1, 0.2, 0.2);     // diffuse reflectance coefficient
-vec3 ka = vec3(0.3, 0.3, 0.3);   // ambient reflectance coefficient
+vec3 kd = vec3(0.05, 0.05, 0.05);     // diffuse reflectance coefficient
+vec3 ka = vec3(0.05, 0.05, 0.05);   // ambient reflectance coefficient
 vec3 ks = vec3(0.8, 0.8, 0.8);   // specular reflectance coefficient
 vec3 lightPos = vec3(5, 5, 5);   // light position in world coordinates
 
 uniform vec3 eyePos;
-
-uniform sampler2D matcap;
 
 in vec4 fragWorldPos;
 in vec3 fragWorldNor;
@@ -40,10 +38,5 @@ void main(void)
 	vec3 specularColor = I * ks * pow(max(0, NdotH), 100);
 	vec3 ambientColor = Iamb * ka;
 
-	vec3 reflectDir = reflect(-V, N);
-	float m = 2.8284271247461903 * sqrt( reflectDir.z+1.0 );
-	vec2 mcuv = reflectDir.xy / m + 0.5;
-	vec4 mccolor = vec4(texture(matcap, mcuv).xyz,1);
-
-	fragColor = mix(vec4(diffuseColor + specularColor + ambientColor, 1), mccolor, 0.5);
+	fragColor = vec4(diffuseColor + ambientColor, 1);
 }
