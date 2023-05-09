@@ -32,6 +32,8 @@ using namespace std;
 
 int gWidth, gHeight;
 
+void setViewingMatrix();
+
 glm::mat4 projectionMatrix;
 glm::mat4 projectionMatrix90;
 glm::mat4 viewingMatrix;
@@ -40,9 +42,13 @@ glm::mat4 modelingMatrix;
 float eyeRotX = 0;
 float eyeRotY = 0;
 glm::vec3 eyePos(0, 0, 0); // used with orbital controls, sent to shaders
-glm::vec3 eyePosActual(0, 5.f, 7.f); // set this eye position to move, used to calculate rotated eye pos.
-glm::vec3 orbitCenter = glm::vec3(0.f, 0.f, -7.0f);
+glm::vec3 eyePosDiffOriginal(0, 5.f, 14.f);
+glm::vec3 eyePosDiff(0, 5.f, 14.f);
 glm::vec3 objCenter = glm::vec3(-0.1f, 1.06f, -7.0f);
+glm::vec3 eyePosActual = objCenter+eyePosDiff; // set this eye position to move, used to calculate rotated eye pos.
+glm::vec3 d = eyePosDiff;
+glm::vec3 prllGround(d.r, 0, d.b);
+float eyeRotYInitial = (acos(dot(normalize(d), normalize(prllGround)))*180.0)/M_PI;
 glm::vec3 armCenter = glm::vec3(-0.1f, 1.06f, -7.0f);
 
 int activeProgramIndex = 0;
@@ -205,16 +211,23 @@ class TeslaBody: public RenderObject{
 		float angle = props["angle"];
 		objCenter.x += speed * sin((-angle / 180.) * M_PI);
 		objCenter.z += speed * cos((-angle / 180.) * M_PI);
-		const float friction = 0.01;
+		const float friction = 0.005;
 		if(speed>0){
 			props["speed"] -= friction;
 		}else{
 			props["speed"] += friction;
 		}
-		if(abs(speed) < 2*friction){
+		if(abs(speed) < 0.01){
 			props["speed"] = 0.0;
 		}
+		if(abs(speed) > 1.0){
+			props["speed"] = (abs(speed)/speed)*1.0;
+		}
 		position = objCenter;
+		eyePosActual = objCenter + eyePosDiffOriginal;
+		eyeRotX += 180-angle;
+		setViewingMatrix();
+		eyeRotX -= 180-angle;
 	}
 	void calculateModelMatrix(){
 		float angle = props["angle"];
@@ -671,9 +684,9 @@ void init()
 
 	readImage("hw2_support_files/ground_texture_sand.jpg", "ground");
 
+	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_body.obj", "TeslaBody", make_unique<TeslaBody>());
 	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo", make_unique<Armadillo>());
 	ParseObj("hw2_support_files/obj/ground.obj", "ground", make_unique<Ground>());
-	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_body.obj", "TeslaBody", make_unique<TeslaBody>());
 	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_tires.obj", "TeslaWheels", make_unique<TeslaWheels>());
 	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_windows.obj", "TeslaWindows", make_unique<TeslaWindows>());
 	//ParseObj("bunny.obj");
@@ -778,11 +791,11 @@ void calcInteractions(){
 	}
 	if (shouldDoAction(GLFW_KEY_A))
 	{
-		getRenderObject("TeslaBody")->props["angle"] -= 1.0;
+		getRenderObject("TeslaBody")->props["angle"] -= 2.0;
 	}
 	if (shouldDoAction(GLFW_KEY_D))
 	{
-		getRenderObject("TeslaBody")->props["angle"] += 1.0;
+		getRenderObject("TeslaBody")->props["angle"] += 2.0;
 	}
 }
 
@@ -799,6 +812,11 @@ void mainLoop(GLFWwindow* window)
 
 void setViewingMatrix()
 {
+	eyeRotX = eyeRotX > 360 ? eyeRotX - 360 : eyeRotX;
+	eyeRotX = eyeRotX < 0 ? eyeRotX + 360 : eyeRotX;
+	// clamp
+	eyeRotY = glm::clamp(eyeRotY, -85.f + eyeRotYInitial, 85.f - eyeRotYInitial);
+	// float newEyeRotY = eyeRotY = glm::clamp(eyeRotY, -85.f, 85.f);
 	// view matrix
 	glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (eyeRotY / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
 	glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (eyeRotX / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
@@ -806,8 +824,8 @@ void setViewingMatrix()
 
 	// use original because we don't reset the rotation to 0 after rotating. (so that it doesn't accumulate)
 	auto origEyePos = eyePosActual;
-	glm::mat4 matIT = glm::translate(glm::mat4(1.0), -orbitCenter);
-	glm::mat4 matT = glm::translate(glm::mat4(1.0), orbitCenter);
+	glm::mat4 matIT = glm::translate(glm::mat4(1.0), -objCenter);
+	glm::mat4 matT = glm::translate(glm::mat4(1.0), objCenter);
 	auto newEyePos4 = matT * matR * matIT * glm::vec4(origEyePos, 1.0);
 
 	glm::vec3 newEyePos = glm::vec3(newEyePos4.x, newEyePos4.y, newEyePos4.z);
@@ -815,7 +833,7 @@ void setViewingMatrix()
 	eyePos = newEyePos;
 
 	// Set the viewing matrix
-	viewingMatrix = glm::lookAt(newEyePos, orbitCenter, glm::vec3(0.0f, 1.0f, 0.0f));
+	viewingMatrix = glm::lookAt(newEyePos, objCenter, glm::vec3(0.0f, 1.0f, 0.0f));
 }
 
 void reshape(GLFWwindow *window, int w, int h)
@@ -867,11 +885,7 @@ void mouseMove(GLFWwindow* window, double xpos, double ypos)
 
 	eyeRotX += -deltaX*mult;
 	eyeRotY += -deltaY*mult;
-	eyeRotX = eyeRotX > 360 ? eyeRotX - 360 : eyeRotX;
-	eyeRotX = eyeRotX < 0 ? eyeRotX + 360 : eyeRotX;
-	//clamp
-	eyeRotY = glm::clamp(eyeRotY, -85.f, 85.f);
-	setViewingMatrix();
+	// setViewingMatrix();
 }
 
 void mouseButton(GLFWwindow* window, int button, int action, int mods)
