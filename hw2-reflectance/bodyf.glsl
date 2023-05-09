@@ -35,7 +35,7 @@ void main(void)
 	// }
 	// blurColor /= 9.0;
 	// fragColor = vec4(0,0,0,1);
-	fragColor = mccolor;
+	// fragColor = mccolor;
 	// fragColor = mix(mccolor, blurColor, 0.3);
-	// fragColor = mix(mccolor, texture(skybox, reflectDir), 0.3);
+	fragColor = mix(mccolor, texture(skybox, reflectDir), 0.2);
 }

@@ -195,7 +195,7 @@ class Ground: public RenderObject{
 	void calculateModelMatrix(){
 		glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (-90. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
 		//scale
-		glm::mat4 scale = glm::scale(glm::mat4(1.0), glm::vec3(500.0, 500.0, 500.0));
+		glm::mat4 scale = glm::scale(glm::mat4(1.0), glm::vec3(450.0, 1.0, 450.0));
 		this->geometry.modelMatrix = scale * matRx;
 	}
 	void updateUniforms(){
@@ -837,7 +837,7 @@ void drawEnvMap(){
 
 	auto prevVM = viewingMatrix;
 	auto prevPM = projectionMatrix;
-	projectionMatrix = glm::perspective((float)((90.0 / 180.0) * M_PI), 1.0f, 1.0f, 300.0f);;
+	projectionMatrix = glm::perspective((float)((90.0 / 180.0) * M_PI), 1.0f, 1.0f, 1000.0f);;
 	for (int i = 0; i < 6; ++i) {
 
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, t.textureId, 0);
@@ -935,8 +935,19 @@ void calcInteractions(){
 
 void mainLoop(GLFWwindow* window)
 {
+	// fps code taken from stackoverflow
+	double previousTime = glfwGetTime();
+	int frameCount = 0;
 	while (!glfwWindowShouldClose(window))
 	{
+		double currentTime = glfwGetTime();
+		frameCount++;
+		if (currentTime - previousTime >= 1.0)
+		{
+			dbg(frameCount);
+			frameCount = 0;
+			previousTime = currentTime;
+		}
 		calcInteractions();
 		display();
 		glfwSwapBuffers(window);
@@ -988,7 +999,7 @@ void reshape(GLFWwindow *window, int w, int h)
 	// Use perspective projection
 
 	float fovyRad = (float)(45.0 / 180.0) * M_PI;
-	projectionMatrix = glm::perspective(fovyRad, w / (float)h, 1.0f, 300.0f);
+	projectionMatrix = glm::perspective(fovyRad, w / (float)h, 1.0f, 1000.0f);
 
 	// Assume default camera position and orientation (camera is at
 	// (0, 0, 0) with looking at -z direction and its up vector pointing
@@ -1044,7 +1055,7 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
 
 void debugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)
 {
-	if(GL_DEBUG_TYPE_ERROR != type)return;
+	// if(GL_DEBUG_TYPE_ERROR != type)return;
 	printf("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s",
 		   (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
 		   type, severity, message);
@@ -1078,6 +1089,8 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 	// no need to alias reflections
 	glfwWindowHint(GLFW_SAMPLES, 4);
 	glEnable(GL_MULTISAMPLE);
+	glfwWindowHint(GLFW_DEPTH_BITS, 24);
+
 	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
 	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
