@@ -30,22 +30,17 @@
 
 using namespace std;
 
-GLuint gProgram[2];
 int gWidth, gHeight;
 
-GLint modelingMatrixLoc[2];
-GLint viewingMatrixLoc[2];
-GLint projectionMatrixLoc[2];
-GLint eyePosLoc[2];
-
 glm::mat4 projectionMatrix;
+glm::mat4 projectionMatrix90;
 glm::mat4 viewingMatrix;
 glm::mat4 modelingMatrix;
 
 float eyeRotX = 0;
 float eyeRotY = 0;
 glm::vec3 eyePos(0, 0, 0); // used with orbital controls, sent to shaders
-glm::vec3 eyePosActual(0, 3.f, 2.f); // set this eye position to move, used to calculate rotated eye pos.
+glm::vec3 eyePosActual(0, 5.f, 7.f); // set this eye position to move, used to calculate rotated eye pos.
 glm::vec3 orbitCenter = glm::vec3(0.f, 0.f, -7.0f);
 glm::vec3 objCenter = glm::vec3(-0.1f, 1.06f, -7.0f);
 
@@ -190,7 +185,14 @@ class Ground: public RenderObject{
 		RenderObject::updateUniforms();
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, ::textures["ground"].textureId);
-		
+	}
+};
+
+class TeslaBody: public RenderObject{
+	public:
+	TeslaBody(){
+		program = &programs["tesla"];
+		// position = objCenter;
 	}
 };
 
@@ -524,12 +526,10 @@ void loadTexture(Image& img){
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	if(img.channels == 3){
-		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	}else{
-		glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-	}
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img.width, img.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img.data);
+
+	auto format = img.channels == 3 ? GL_RGB : GL_RGBA;
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	glTexImage2D(GL_TEXTURE_2D, 0, format, img.width, img.height, 0, format, GL_UNSIGNED_BYTE, img.data);
 	glGenerateMipmap(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, 0);
 	cerr << "loaded texture " << img.name << " with id " << t.textureId << endl;
@@ -550,7 +550,9 @@ void loadCubemap(vector<string> names){
 
 	for (int i = 0; i < names.size(); ++i){
 		Image &img = images[names[i]];	
-		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, img.width, img.height, 0, GL_RGB, GL_UNSIGNED_BYTE, img.data);
+		auto format = img.channels == 3 ? GL_RGB : GL_RGBA;
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, format, img.width, img.height, 0, format, GL_UNSIGNED_BYTE, img.data);
 	}
 	glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
 	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
@@ -560,9 +562,11 @@ void readImage(const char* path, string name, bool loadAsTex = true){
 	int w,h,c;
 	stbi_set_flip_vertically_on_load(true);
 	unsigned char *image = stbi_load(path, &w, &h, &c, 0);
+	// unsigned char *image = stbi_load(path, &w, &h, &c, STBI_rgb);
 	if (!image){
 		std::cout << "Failed to load image" << std::endl;
 	}else{
+		cout<<"loaded image "<<name<<" with "<<w<<" "<<h<<" "<<c<<endl;
 		images[name] = Image(w, h, c, image, name);
 		if(loadAsTex)
 		loadTexture(images[name]);
@@ -576,6 +580,7 @@ void readSkybox(string path, string ext = "jpg"){
 	readImage((path + "back." + ext).c_str(), "back");
 	readImage((path + "front." + ext).c_str(), "front");
 
+	// loadCubemap({"right", "left", "top", "bottom", "back", "front"});
 	loadCubemap({"right", "left", "bottom", "top", "front", "back"});
 }
 class SkyBox: public Geometry{
@@ -620,7 +625,10 @@ void SkyBox::init(){
 	this->faces.push_back(Face(vIndex, tIndex, nIndex));
 	this->initVBO();
 
-	readSkybox("hw2_support_files/skybox_texture_sea/", "jpg");
+	readSkybox("hw2_support_files/custom/village/", "png");
+	// readSkybox("hw2_support_files/custom/village/", "png");
+	// readSkybox("hw2_support_files/skybox_texture_abandoned_village/", "png");
+	// readSkybox("hw2_support_files/skybox_texture_test/", "jpg");
 }
 SkyBox skybox;
 
@@ -633,6 +641,9 @@ void init()
 
 	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo", make_unique<Armadillo>());
 	ParseObj("hw2_support_files/obj/ground.obj", "ground", make_unique<Ground>());
+	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_body.obj", "TeslaBody", make_unique<TeslaBody>());
+	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_tires.obj", "TeslaWheels", make_unique<TeslaWheels>());
+	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_windows.obj", "TeslaWindows", make_unique<TeslaWindows>());
 	//ParseObj("bunny.obj");
 	// genRandomImage(300, 300);
 
@@ -763,6 +774,7 @@ void reshape(GLFWwindow *window, int w, int h)
 
 	float fovyRad = (float)(45.0 / 180.0) * M_PI;
 	projectionMatrix = glm::perspective(fovyRad, w / (float)h, 1.0f, 100.0f);
+	projectionMatrix90 = glm::perspective((float)((90.0 / 180.0) * M_PI), w / (float)h, 1.0f, 100.0f);
 
 	// Assume default camera position and orientation (camera is at
 	// (0, 0, 0) with looking at -z direction and its up vector pointing

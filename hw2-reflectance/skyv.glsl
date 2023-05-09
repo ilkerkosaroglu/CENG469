@@ -17,6 +17,8 @@ void main(void)
     vM[3][0] = 0;
     vM[3][1] = 0;
     vM[3][2] = 0;
+    // inverseViewingMatrix = inverse(vM);
+    // inverseViewingMatrix = inverse(vM);
     inverseViewingMatrix = inverse(projectionMatrix * vM);
     // gl_Position = projectionMatrix * viewingMatrix * vec4(inVertex, 1);
 }
