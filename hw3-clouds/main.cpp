@@ -185,25 +185,6 @@ class Armadillo: public RenderObject{
 		glUniform1i(program->uniforms["matcap"], 0);
 	}
 };
-class Ground: public RenderObject{
-	public:
-	Ground(){
-		program = &programs["ground"];
-		glUseProgram(program->program);
-		glUniform1i(program->uniforms["groundTexture"], 0);
-	}
-	void calculateModelMatrix(){
-		glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (-90. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
-		//scale
-		glm::mat4 scale = glm::scale(glm::mat4(1.0), glm::vec3(450.0, 1.0, 450.0));
-		this->geometry.modelMatrix = scale * matRx;
-	}
-	void updateUniforms(){
-		RenderObject::updateUniforms();
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, ::textures["ground"].textureId);
-	}
-};
 
 class TeslaBody: public RenderObject{
 	public:
@@ -501,7 +482,6 @@ Program& initShader(string name, string vert, string frag, vector<string> unifor
 void initShaders(){
 	initShader("skybox", "skyv.glsl", "skyf.glsl", {"skybox"});
 	initShader("arm", "vert.glsl", "frag.glsl", {"matcap"});
-	initShader("ground", "groundv.glsl", "groundf.glsl", {"groundTexture"});
 	initShader("tesla", "bodyv.glsl", "bodyf.glsl", {"matcap", "skybox"});
 	initShader("wheels", "wv.glsl", "wf.glsl", {});
 	initShader("windows", "windowv.glsl", "windowf.glsl", {"skybox"});
@@ -762,14 +742,12 @@ void init()
 {
 	initShaders();
 
-	readImage("hw2_support_files/ground_texture_sand.jpg", "ground");
 	readImage("hw2_support_files/gray.jpg", "matcapblack");
 	readImage("hw2_support_files/soft_clay.jpg", "clay");
 
 	initEnvMapTexture();
 
 	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo", make_unique<Armadillo>());
-	ParseObj("hw2_support_files/obj/ground.obj", "ground", make_unique<Ground>());
 	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_body.obj", "TeslaBody", make_unique<TeslaBody>());
 	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_tires.obj", "TeslaWheels", make_unique<TeslaWheels>());
 	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_windows.obj", "TeslaWindows", make_unique<TeslaWindows>());
