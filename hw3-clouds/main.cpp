@@ -481,7 +481,7 @@ Program& initShader(string name, string vert, string frag, vector<string> unifor
 
 void initShaders(){
 	initShader("skybox", "skyv.glsl", "skyf.glsl", {"skybox"});
-	initShader("clouds", "cloudv.glsl", "cloudf.glsl", {});
+	initShader("clouds", "cloudv.glsl", "cloudf.glsl", {"eyePos"});
 	initShader("arm", "vert.glsl", "frag.glsl", {"matcap"});
 	initShader("tesla", "bodyv.glsl", "bodyf.glsl", {"matcap", "skybox"});
 	initShader("wheels", "wv.glsl", "wf.glsl", {});
@@ -745,6 +745,7 @@ void Clouds::draw(){
 	glUseProgram(program->program);
 	glUniformMatrix4fv(program->uniforms["projectionMatrix"], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 	glUniformMatrix4fv(program->uniforms["viewingMatrix"], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
+	glUniform3fv(program->uniforms["eyePos"], 1, glm::value_ptr(eyePos));
 
 	glBindVertexArray(this->vao);
 	glBindBuffer(GL_ARRAY_BUFFER, this->vertexAttribBuffer);
@@ -1099,21 +1100,20 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 		exit(-1);
 	}
 
-	//glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-	//glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
+
 	// no need to alias reflections
 	glfwWindowHint(GLFW_SAMPLES, 4);
 	glEnable(GL_MULTISAMPLE);
 	glfwWindowHint(GLFW_DEPTH_BITS, 24);
 
-	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
-	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+	// vsync
+	glfwSwapInterval(1);
 
-	int width = 640, height = 480;
+	int width = 1280, height = 720;
 	window = glfwCreateWindow(width, height, "Simple Example", NULL, NULL);
 
 	if (!window)
