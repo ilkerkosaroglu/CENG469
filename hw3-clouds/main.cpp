@@ -481,6 +481,7 @@ Program& initShader(string name, string vert, string frag, vector<string> unifor
 
 void initShaders(){
 	initShader("skybox", "skyv.glsl", "skyf.glsl", {"skybox"});
+	initShader("clouds", "cloudv.glsl", "cloudf.glsl", {});
 	initShader("arm", "vert.glsl", "frag.glsl", {"matcap"});
 	initShader("tesla", "bodyv.glsl", "bodyf.glsl", {"matcap", "skybox"});
 	initShader("wheels", "wv.glsl", "wf.glsl", {});
@@ -688,16 +689,38 @@ void readSkybox(string path, string ext = "jpg"){
 	// loadCubemap({"right", "left", "top", "bottom", "back", "front"});
 	loadCubemap({"right", "left", "bottom", "top", "front", "back"});
 }
-class SkyBox: public Geometry{
+
+class SSPlane: public Geometry{
+	public:
+	void draw();
+	void init();
+};
+void SSPlane::init(){
+	this->vertices.push_back(Vertex(-1, -1, 0));
+	this->vertices.push_back(Vertex(-1, 1, 0));
+	this->vertices.push_back(Vertex(1, 1, 0));
+	this->vertices.push_back(Vertex(1, -1, 0));
+	this->normals.push_back(Normal(0, 0, 1));
+	int vIndex[3] = {0, 1, 2};
+	int nIndex[3] = {0, 0, 0};
+	int tIndex[3] = {0, 0, 0};
+	this->faces.push_back(Face(vIndex, tIndex, nIndex));
+	vIndex[0] = 0;
+	vIndex[1] = 2;
+	vIndex[2] = 3;
+	this->faces.push_back(Face(vIndex, tIndex, nIndex));
+	this->initVBO();
+}
+class SkyBox: public SSPlane{
 	public:
 	void draw();
 	void init();
 };
 
 void SkyBox::draw(){
-	auto program = &programs["skybox"];
 	glDepthFunc(GL_LEQUAL);
 	glDepthRange(1, 1);
+	auto program = &programs["skybox"];
 	glUseProgram(program->program);
 	glUniformMatrix4fv(program->uniforms["projectionMatrix"], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
 	glUniformMatrix4fv(program->uniforms["viewingMatrix"], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
@@ -713,29 +736,32 @@ void SkyBox::draw(){
 	glDepthFunc(GL_LESS);
 	glDepthRange(0, 1);
 }
+class Clouds: public SSPlane{
+	public:
+	void draw();
+};
+void Clouds::draw(){
+	auto program = &programs["clouds"];
+	glUseProgram(program->program);
+	glUniformMatrix4fv(program->uniforms["projectionMatrix"], 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+	glUniformMatrix4fv(program->uniforms["viewingMatrix"], 1, GL_FALSE, glm::value_ptr(viewingMatrix));
+
+	glBindVertexArray(this->vao);
+	glBindBuffer(GL_ARRAY_BUFFER, this->vertexAttribBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->indexBuffer);
+
+	glDrawElements(GL_TRIANGLES, this->faces.size() * 3, GL_UNSIGNED_INT, 0);
+};
 
 void SkyBox::init(){
-	this->vertices.push_back(Vertex(-1, -1, 0));
-	this->vertices.push_back(Vertex(-1, 1, 0));
-	this->vertices.push_back(Vertex(1, 1, 0));
-	this->vertices.push_back(Vertex(1, -1, 0));
-	this->normals.push_back(Normal(0, 0, 1));
-	int vIndex[3] = {0, 1, 2};
-	int nIndex[3] = {0, 0, 0};
-	int tIndex[3] = {0, 0, 0};
-	this->faces.push_back(Face(vIndex, tIndex, nIndex));
-	vIndex[0] = 0;
-	vIndex[1] = 2;
-	vIndex[2] = 3;
-	this->faces.push_back(Face(vIndex, tIndex, nIndex));
-	this->initVBO();
-
+	SSPlane::init();
 	readSkybox("hw2_support_files/custom/village/", "png");
 	// readSkybox("hw2_support_files/custom/village/", "png");
 	// readSkybox("hw2_support_files/skybox_texture_abandoned_village/", "png");
 	// readSkybox("hw2_support_files/skybox_texture_test/", "jpg");
 }
 SkyBox skybox;
+Clouds cloud;
 
 /*** ----------------- INIT ------------------ */
 void init()
@@ -760,6 +786,7 @@ void init()
 	}
 
 	skybox.init();
+	cloud.init();
 }
 /*** ----------------------------------------- */
 
@@ -844,7 +871,8 @@ void display(){
 	glClearDepth(1.0f);
 	glClearStencil(0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
+	glEnable(GL_DEPTH_TEST);
+	glDisable(GL_BLEND);
 	// draw envmap centering the car (objCenter)
 	drawEnvMap();
 
@@ -855,6 +883,11 @@ void display(){
 		o->drawModel();
 	}
 
+	// assume clouds are not obstructed by other objects, hence no depth test
+	glDisable(GL_DEPTH_TEST);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	cloud.draw();
 }
 
 map<int, bool> pressed;
