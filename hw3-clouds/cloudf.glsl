@@ -6,18 +6,19 @@ in mat4 inverseViewingMatrix;
 in vec4 pos;
 out vec4 fragColor;
 
-float stepSize = 0.8;
-const int maxSteps = 500;
+float stepSize = 3.0;
+const int maxSteps = 300;
 
 vec3 skyColor = vec3(0.2, 0.4, 0.69);
 vec3 cloudColor = vec3(1.0, 1.0, 1.0);
+vec3 denseColor = vec3(0.5,0.5,0.5);
 
 float cloudSize = 100;
-float cloudGaps = 30;
+float cloudGaps = 50;
 float cloudStart = 0.0;
 float cloudEnd = 100.0;
 
-float absorptionCoeff = stepSize * 2.0;
+float absorptionCoeff = stepSize * 0.3;
 
 vec3 sunPos = vec3(0.0, 100.0, 0.0);
 
@@ -75,11 +76,6 @@ vec3 getGradient(ivec3 p){
 }
 
 float noiseOpacity(vec3 p){
-	if(p.y < cloudStart) return 0.0;
-	if(p.y > cloudEnd) return 0.0;
-
-	p /= cloudSize;
-	// p.y *= 5;
 	ivec3 ijk = ivec3(floor(p));
 	float c = 0.0;
 	vec3 d = fract(p);
@@ -115,11 +111,6 @@ float rand(vec3 co){
 
 float valueNoise(vec3 p) 
 {
-	if(p.y < cloudStart) return 0.0;
-	if(p.y > cloudEnd) return 0.0;
-
-	p /= cloudSize;
-
     vec3 u = floor(p);
     vec3 v = fract(p);
     vec3 s = smoothstep(0.0, 1.0, v);
@@ -133,9 +124,12 @@ float valueNoise(vec3 p)
     float g = rand(u + vec3(0.0, 1.0, 1.0));
     float h = rand(u + vec3(1.0, 1.0, 1.0));
     
-    return mix(mix(mix(a, b, s.x), mix(c, d, s.x), s.y),
+	float res = mix(mix(mix(a, b, s.x), mix(c, d, s.x), s.y),
                mix(mix(e, f, s.x), mix(g, h, s.x), s.y),
                s.z);
+    float unnor = (res*2.0)-1.0;
+	if(unnor>0)unnor*=cloudGaps;
+	return (unnor+1)/(cloudGaps+1);
 }
 
 
@@ -149,32 +143,56 @@ void main(void)
 	vec3 color = skyColor;
 	float transparency = 1.0;
 	
+	float maxOpacity = 0;
+	for(int j = 0; j < 3; j++){
+		maxOpacity += pow(4.0, - float(j));
+	}
 
 	rayPos += rayDir * stepSize * maxSteps;
+	bool hitOnce = false;
 	for(int i = 0; i < maxSteps; i++){
-		// float opacity = valueNoise(rayPos);
-			
+			if(rayPos.y < cloudStart || rayPos.y > cloudEnd){
+				if(hitOnce){
+					break;
+				}
+				rayPos -= rayDir * stepSize;
+				continue;
+			}
+			hitOnce = true;
 			vec3 sunDist = rayPos - sunPos.xyz;
 			vec3 sunDir = normalize(sunDist);
 			vec3 sunStepSize = sunDist / 100.0;
 			vec3 curPos = sunPos;
-			// for(int j=0;j<100;j++){
-			// 	vec3 curpos = crPos + sunDir * sunStepSize * float(j);
-			// 	float opacity = noiseOpacity(rayPos*pow(2.0, float(j)));
 
-			// }
 			float opacity = 0.0;
-			for(int j=1;j<4;j++){
-				opacity += noiseOpacity(rayPos*pow(2.0, float(j)))/4;
+			// float mult = 1.0;
+			for(int j=0;j<3;j++){
+				// for(int j=0;j<100;j++){
+				// 	vec3 curpos = crPos + sunDir * sunStepSize * float(j);
+				// 	float opacity = noiseOpacity(rayPos*pow(2.0, float(j)));
+				// }
+				vec3 noisePos = rayPos*pow(2.0, float(j))/cloudSize;
+				opacity += (pow(4.0, -float(j))*valueNoise(noisePos))/maxOpacity;
+				// opacity += (pow(4.0, -float(j))*noiseOpacity(noisePos))/maxOpacity;
+				// if(rayPos.y < cloudStart-3 || rayPos.y > cloudEnd+3){
+				// 	continue;
+				// }
+				// if(rayPos.y < cloudStart || rayPos.y > cloudEnd){
+				// 	mult = 0.01;
+				// }
+				// opacity += (mult*pow(4.0, -float(j))*noiseOpacity(rayPos*pow(2.0, float(j))))/maxOpacity;
 			}
 			float absorbed = opacity * absorptionCoeff;
 			transparency *= 1.0 - absorbed;
-			color = mix(color, mix(cloudColor, vec3(0.2,0.2,0.2), opacity*3), absorbed);
+			
+			// if(rayPos.y+3.0 > cloudEnd){
+			// 	denseColor = cloudColor;
+			// }
+			color = mix(color, cloudColor, absorbed);
+			// color = mix(color, mix(cloudColor, denseColor, opacity*3), absorbed);
 		
 		rayPos -= rayDir * stepSize;
 	}
-
-	if(transparency > 0.95) discard;
 
 	// float op = noiseOpacity(eyePos.xyz);
 	// fragColor = vec4(op,op,op, 1);
