@@ -16,8 +16,8 @@
 #include <glm/glm.hpp> // GL Math library header
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp> 
-//#include <glm/gtc/quaternion.hpp>
-//#include <glm/gtx/quaternion.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -44,6 +44,7 @@ float eyeRotX = 0;
 float eyeRotY = 0;
 glm::vec3 eyePos(0, 0, 0); // used with orbital controls, sent to shaders
 glm::vec3 eyePosDiff(0, 5.f, 14.f);
+float eyeDist = 1.0;
 glm::vec3 objCenter = glm::vec3(-0.1f, 1.06f, -7.0f);
 glm::vec3 eyePosActual = objCenter+eyePosDiff; // set this eye position to move, used to calculate rotated eye pos.
 glm::vec3 d = eyePosDiff;
@@ -51,7 +52,9 @@ glm::vec3 prllGround(d.r, 0, d.b);
 float eyeRotYInitial = (acos(dot(normalize(d), normalize(prllGround)))*180.0)/M_PI;
 glm::vec3 armCenter = glm::vec3(-0.1f, 1.06f, -7.0f);
 
-int activeProgramIndex = 0;
+float speed = 0;
+
+glm::quat orientation(0, 0, 0, 1);
 
 struct Vertex
 {
@@ -933,18 +936,7 @@ map<int, bool> pressed;
 // 	return false;
 // }
 void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods){
-	if (key == GLFW_KEY_Q && action == GLFW_PRESS){
-		eyeRotX = -90;
-	}
-	if (key == GLFW_KEY_E && action == GLFW_PRESS){
-		eyeRotX = 90;
-	}
-	if (key == GLFW_KEY_R && action == GLFW_PRESS){
-		eyeRotX = 0;
-	}
-	if (key == GLFW_KEY_T && action == GLFW_PRESS){
-		eyeRotX = 180;
-	}
+
 	if(action == GLFW_PRESS){
 		pressed[key] = true;
 	}
@@ -959,21 +951,74 @@ bool shouldDoAction(int key){
 	return pressed[key];
 }
 void calcInteractions(){
+	// up vector
+	glm::vec3 up(0, 1, 0);
+	// right vector
+	glm::vec3 right(1, 0, 0);
+	// back vector
+	glm::vec3 back(0, 0, 1);
+
+	float turnR = 0.0;
+	glm::vec3 turnAxle(0, 0, 0);
+
 	if (shouldDoAction(GLFW_KEY_W))
 	{
-		getRenderObject("TeslaBody")->props["speed"] += 0.015;
+		speed += 0.1;
+		// getRenderObject("TeslaBody")->props["speed"] += 0.015;
 	}
 	if (shouldDoAction(GLFW_KEY_S))
 	{
-		getRenderObject("TeslaBody")->props["speed"] -= 0.015;
+		speed -= 0.1;
+		// getRenderObject("TeslaBody")->props["speed"] -= 0.015;
 	}
 	if (shouldDoAction(GLFW_KEY_A))
 	{
-		getRenderObject("TeslaBody")->props["angle"] -= 2.0;
+		turnR = 0.02;
+		turnAxle = glm::rotate(orientation, up);
 	}
 	if (shouldDoAction(GLFW_KEY_D))
 	{
-		getRenderObject("TeslaBody")->props["angle"] += 2.0;
+		turnR = -0.02;
+		turnAxle = glm::rotate(orientation, up);
+	}
+	if (shouldDoAction(GLFW_KEY_Q))
+	{
+		turnR = 0.02;
+		turnAxle = glm::rotate(orientation, back);
+	}
+	if (shouldDoAction(GLFW_KEY_E))
+	{
+		turnR = -0.02;
+		turnAxle = glm::rotate(orientation, back);
+	}
+	if (shouldDoAction(GLFW_KEY_U))
+	{
+		// PLANE CONTROLS - INVERTED
+		turnR = -0.02;
+		turnAxle = glm::rotate(orientation, right);
+	}
+	if (shouldDoAction(GLFW_KEY_J))
+	{
+		// PLANE CONTROLS - INVERTED
+		turnR = 0.02;
+		turnAxle = glm::rotate(orientation, right);
+	}
+	if (shouldDoAction(GLFW_KEY_T))
+	{
+		cout<<"toggle clouds"<<endl;
+	}
+
+	// do the rotation
+	glm::quat q = glm::angleAxis(turnR, turnAxle);
+	orientation = q * orientation;
+
+	// move the eye according to speed
+	eyePos += -speed * glm::rotate(orientation, back);
+	
+	// friction
+	speed *= 0.99;
+	if(abs(speed) < 0.01){
+		speed = 0;
 	}
 }
 
@@ -993,6 +1038,7 @@ void mainLoop(GLFWwindow* window)
 			previousTime = currentTime;
 		}
 		calcInteractions();
+		setViewingMatrix();
 		display();
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -1001,28 +1047,11 @@ void mainLoop(GLFWwindow* window)
 
 void setViewingMatrix()
 {
-	eyeRotX = eyeRotX > 360 ? eyeRotX - 360 : eyeRotX;
-	eyeRotX = eyeRotX < 0 ? eyeRotX + 360 : eyeRotX;
-	// clamp
-	eyeRotY = glm::clamp(eyeRotY, -85.f + eyeRotYInitial, 85.f - eyeRotYInitial);
-	// float newEyeRotY = eyeRotY = glm::clamp(eyeRotY, -85.f, 85.f);
-	// view matrix
-	glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (eyeRotY / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
-	glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (eyeRotX / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
-	glm::mat4 matR = matRy * matRx;
-
-	// use original because we don't reset the rotation to 0 after rotating. (so that it doesn't accumulate)
-	auto origEyePos = eyePosActual;
-	glm::mat4 matIT = glm::translate(glm::mat4(1.0), -objCenter);
-	glm::mat4 matT = glm::translate(glm::mat4(1.0), objCenter);
-	auto newEyePos4 = matT * matR * matIT * glm::vec4(origEyePos, 1.0);
-
-	glm::vec3 newEyePos = glm::vec3(newEyePos4.x, newEyePos4.y, newEyePos4.z);
-
-	eyePos = newEyePos;
+	glm::vec3 forw = glm::rotate(orientation, glm::vec3(0, 0, -1));
+	glm::vec3 up = glm::rotate(orientation, glm::vec3(0, 1, 0));
 
 	// Set the viewing matrix
-	viewingMatrix = glm::lookAt(newEyePos, objCenter, glm::vec3(0.0f, 1.0f, 0.0f));
+	viewingMatrix = glm::lookAt(eyePos-forw*eyeDist, eyePos, up);
 }
 
 void reshape(GLFWwindow *window, int w, int h)
@@ -1094,7 +1123,7 @@ void mouseButton(GLFWwindow* window, int button, int action, int mods)
 
 void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
 {
-	eyePosDiff *= (1.0 - yoffset / 10.0);
+	eyeDist *= (1.0 - yoffset / 10.0);
 }
 
 void debugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar *message, const void *userParam)

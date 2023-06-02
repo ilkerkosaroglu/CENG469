@@ -102,18 +102,20 @@ void main(void)
 		float t = (cloudStart - eyePos.y)/rayDir.y;
 		if(t<0)discard;
 		// if(t>far)discard;
-		if(t>15*far)discard;
-		if(length((rayDir).xz)>0.995 && t>far)discard;
+		// if(t>15*far)discard;
+		if(length((rayDir).xz)>0.999 && t>3*far)discard;
 		// if(length((rayDir * t).xz)>far)discard;
 		rayPos += rayDir * t;
+		// if(length(rayPos- eyePos) > maxSteps)discard;
 	}
 	if(eyePos.y > cloudEnd){
 		float t = (cloudEnd-eyePos.y)/rayDir.y;
 		if(t<0)discard;
-		if(t>15*far)discard;
-		if(length((rayDir).xz)>0.995 && t>far)discard;
+		// if(t>15*far)discard;
+		if(length((rayDir).xz)>0.999 && t>3*far)discard;
 		// if(length((rayDir * t).xz)>far)discard;
 		rayPos += rayDir * t;
+		// if(length(rayPos- eyePos) > maxSteps)discard;
 	}
 	// calculate only 100 units of ray
 	rayPos += rayDir * stepSize * maxSteps;
