@@ -40,16 +40,12 @@ glm::mat4 projectionMatrix;
 glm::mat4 viewingMatrix;
 glm::mat4 modelingMatrix;
 
-float eyeRotX = 0;
-float eyeRotY = 0;
 glm::vec3 eyePos(0, 0, 0); // used with orbital controls, sent to shaders
 glm::vec3 eyePosDiff(0, 5.f, 14.f);
 float eyeDist = 1.0;
 glm::vec3 objCenter = glm::vec3(-0.1f, 1.06f, -7.0f);
-glm::vec3 eyePosActual = objCenter+eyePosDiff; // set this eye position to move, used to calculate rotated eye pos.
 glm::vec3 d = eyePosDiff;
 glm::vec3 prllGround(d.r, 0, d.b);
-float eyeRotYInitial = (acos(dot(normalize(d), normalize(prllGround)))*180.0)/M_PI;
 glm::vec3 armCenter = glm::vec3(-0.1f, 1.06f, -7.0f);
 
 float speed = 0;
@@ -980,22 +976,22 @@ void calcInteractions(){
 	if (shouldDoAction(GLFW_KEY_A))
 	{
 		turnR = 0.02;
-		turnAxle = glm::rotate(orientation, up);
+		turnAxle = glm::rotate(orientation, back);
 	}
 	if (shouldDoAction(GLFW_KEY_D))
 	{
 		turnR = -0.02;
-		turnAxle = glm::rotate(orientation, up);
+		turnAxle = glm::rotate(orientation, back);
 	}
 	if (shouldDoAction(GLFW_KEY_Q))
 	{
 		turnR = 0.02;
-		turnAxle = glm::rotate(orientation, back);
+		turnAxle = glm::rotate(orientation, up);
 	}
 	if (shouldDoAction(GLFW_KEY_E))
 	{
 		turnR = -0.02;
-		turnAxle = glm::rotate(orientation, back);
+		turnAxle = glm::rotate(orientation, up);
 	}
 	if (shouldDoAction(GLFW_KEY_U))
 	{
@@ -1091,20 +1087,7 @@ int lastY = 0;
 
 void mouseMove(GLFWwindow* window, double xpos, double ypos)
 {
-	float mult = 0.5;
-	if(lastX == 0 && lastY == 0){
-		lastX = xpos;
-		lastY = ypos;
-		return;
-	}
-	float deltaX = xpos - lastX;
-	float deltaY = ypos - lastY;
-	lastX = xpos;
-	lastY = ypos;
 
-	eyeRotX += -deltaX*mult;
-	eyeRotY += -deltaY*mult;
-	setViewingMatrix();
 }
 
 void mouseButton(GLFWwindow* window, int button, int action, int mods)
