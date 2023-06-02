@@ -6,8 +6,8 @@ in mat4 inverseViewingMatrix;
 in vec4 pos;
 out vec4 fragColor;
 
-float stepSize = 0.5;
-const int maxSteps = 300;
+float stepSize = 0.8;
+const int maxSteps = 500;
 
 vec3 skyColor = vec3(0.2, 0.4, 0.69);
 vec3 cloudColor = vec3(1.0, 1.0, 1.0);
@@ -15,11 +15,11 @@ vec3 cloudColor = vec3(1.0, 1.0, 1.0);
 float cloudSize = 100;
 float cloudGaps = 30;
 float cloudStart = 0.0;
-float cloudEnd = 40.0;
+float cloudEnd = 100.0;
 
-float absorptionCoeff = stepSize * 0.4;
+float absorptionCoeff = stepSize * 2.0;
 
-vec3 lightPos = vec3(0.0, 100.0, 0.0);
+vec3 sunPos = vec3(0.0, 100.0, 0.0);
 
 vec3 gradients[16] = {
 	(vec3(1, 1, 0)),
@@ -153,15 +153,28 @@ void main(void)
 	rayPos += rayDir * stepSize * maxSteps;
 	for(int i = 0; i < maxSteps; i++){
 		// float opacity = valueNoise(rayPos);
-		for(int j=1;j<4;j++){
-			// float opacity = valueNoise(rayPos*pow(2.0, float(j)));
-			float opacity = noiseOpacity(rayPos*pow(2.0, float(j)));
+			
+			vec3 sunDist = rayPos - sunPos.xyz;
+			vec3 sunDir = normalize(sunDist);
+			vec3 sunStepSize = sunDist / 100.0;
+			vec3 curPos = sunPos;
+			// for(int j=0;j<100;j++){
+			// 	vec3 curpos = crPos + sunDir * sunStepSize * float(j);
+			// 	float opacity = noiseOpacity(rayPos*pow(2.0, float(j)));
+
+			// }
+			float opacity = 0.0;
+			for(int j=1;j<4;j++){
+				opacity += noiseOpacity(rayPos*pow(2.0, float(j)))/4;
+			}
 			float absorbed = opacity * absorptionCoeff;
 			transparency *= 1.0 - absorbed;
-			color = mix(color, cloudColor, absorbed);
-		}
+			color = mix(color, mix(cloudColor, vec3(0.2,0.2,0.2), opacity*3), absorbed);
+		
 		rayPos -= rayDir * stepSize;
 	}
+
+	if(transparency > 0.95) discard;
 
 	// float op = noiseOpacity(eyePos.xyz);
 	// fragColor = vec4(op,op,op, 1);
