@@ -7,34 +7,37 @@ in vec4 pos;
 out vec4 fragColor;
 
 float stepSize = 0.5;
-const int maxSteps = 500;
+const int maxSteps = 300;
 
 vec3 skyColor = vec3(0.2, 0.4, 0.69);
 vec3 cloudColor = vec3(1.0, 1.0, 1.0);
 
-float cloudSize = 20;
+float cloudSize = 100;
+float cloudGaps = 30;
 float cloudStart = 0.0;
-float cloudEnd = 30.0;
+float cloudEnd = 40.0;
 
-float absorptionCoeff = stepSize * 0.20;
+float absorptionCoeff = stepSize * 0.4;
+
+vec3 lightPos = vec3(0.0, 100.0, 0.0);
 
 vec3 gradients[16] = {
-	vec3(1, 1, 0),
-	vec3(-1, 1, 0),
-	vec3(1, -1, 0),
-	vec3(-1, -1, 0),
-	vec3(1, 0, 1),
-	vec3(-1, 0, 1),
-	vec3(1, 0, -1),
-	vec3(-1, 0, -1),
-	vec3(0, 1, 1),
-	vec3(0, -1, 1),
-	vec3(0, 1, -1),
-	vec3(0, -1, -1),
-	vec3(1, 1, 0),
-	vec3(-1, 1, 0),
-	vec3(0, -1, 1),
-	vec3(0, -1, -1)
+	(vec3(1, 1, 0)),
+	(vec3(-1, 1, 0)),
+	(vec3(1, -1, 0)),
+	(vec3(-1, -1, 0)),
+	(vec3(1, 0, 1)),
+	(vec3(-1, 0, 1)),
+	(vec3(1, 0, -1)),
+	(vec3(-1, 0, -1)),
+	(vec3(0, 1, 1)),
+	(vec3(0, -1, 1)),
+	(vec3(0, 1, -1)),
+	(vec3(0, -1, -1)),
+	(vec3(1, 1, 0)),
+	(vec3(-1, 1, 0)),
+	(vec3(0, -1, 1)),
+	(vec3(0, -1, -1))
 };
 
 
@@ -76,10 +79,11 @@ float noiseOpacity(vec3 p){
 	if(p.y > cloudEnd) return 0.0;
 
 	p /= cloudSize;
+	// p.y *= 5;
 	ivec3 ijk = ivec3(floor(p));
 	float c = 0.0;
 	vec3 d = fract(p);
-	c += f(d.x) * f(d.y) * f(d.z) * dot(getGradient(ijk), d);
+	c += f(d.x) * f(d.y) * f(d.z) * dot(getGradient(ijk), (d));
 	c += f(1.0 - d.x) * f(d.y) * f(d.z) * dot(getGradient(ijk + ivec3(1, 0, 0)), (d - vec3(1, 0, 0)));
 	c += f(d.x) * f(1.0 - d.y) * f(d.z) * dot(getGradient(ijk + ivec3(0, 1, 0)), (d - vec3(0, 1, 0)));
 	c += f(d.x) * f(d.y) * f(1.0 - d.z) * dot(getGradient(ijk + ivec3(0, 0, 1)), (d - vec3(0, 0, 1)));
@@ -87,7 +91,10 @@ float noiseOpacity(vec3 p){
 	c += f(1.0 - d.x) * f(d.y) * f(1.0 - d.z) * dot(getGradient(ijk + ivec3(1, 0, 1)), (d - vec3(1, 0, 1)));
 	c += f(d.x) * f(1.0 - d.y) * f(1.0 - d.z) * dot(getGradient(ijk + ivec3(0, 1, 1)), (d - vec3(0, 1, 1)));
 	c += f(1.0 - d.x) * f(1.0 - d.y) * f(1.0 - d.z) * dot(getGradient(ijk + ivec3(1, 1, 1)), (d - vec3(1, 1, 1)));
-	return (c+1.0)/2.0;
+
+	if(c>0)c*=cloudGaps;
+	return (c+1.0)/(cloudGaps+1);
+	// return (c+1.0)/2.0;
 	// return abs(c);
 	// for(int i=0;i<8;i++){
 	// 	ivec3 di = ivec3(i / 4, (i / 2) % 2, i % 2);
@@ -101,6 +108,37 @@ float noiseOpacity(vec3 p){
 	// return abs(c);
 }
 
+float rand(vec3 co){
+    // return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+	return fract(sin(dot(co, vec3(12.9898, 78.233, 45.5432))) * 43758.5453);
+}
+
+float valueNoise(vec3 p) 
+{
+	if(p.y < cloudStart) return 0.0;
+	if(p.y > cloudEnd) return 0.0;
+
+	p /= cloudSize;
+
+    vec3 u = floor(p);
+    vec3 v = fract(p);
+    vec3 s = smoothstep(0.0, 1.0, v);
+    
+    float a = rand(u);
+    float b = rand(u + vec3(1.0, 0.0, 0.0));
+    float c = rand(u + vec3(0.0, 1.0, 0.0));
+    float d = rand(u + vec3(1.0, 1.0, 0.0));
+    float e = rand(u + vec3(0.0, 0.0, 1.0));
+    float f = rand(u + vec3(1.0, 0.0, 1.0));
+    float g = rand(u + vec3(0.0, 1.0, 1.0));
+    float h = rand(u + vec3(1.0, 1.0, 1.0));
+    
+    return mix(mix(mix(a, b, s.x), mix(c, d, s.x), s.y),
+               mix(mix(e, f, s.x), mix(g, h, s.x), s.y),
+               s.z);
+}
+
+
 void main(void)
 {
 	vec4 pos4 = inverseViewingMatrix * pos;
@@ -110,19 +148,23 @@ void main(void)
 	vec3 rayDir = dir;
 	vec3 color = skyColor;
 	float transparency = 1.0;
+	
 
 	rayPos += rayDir * stepSize * maxSteps;
 	for(int i = 0; i < maxSteps; i++){
-		float opacity = noiseOpacity(rayPos);
-		float absorbed = opacity * absorptionCoeff;
-
-		transparency *= 1.0 - absorbed;
-
-		color = mix(cloudColor, color, absorbed);
+		// float opacity = valueNoise(rayPos);
+		for(int j=1;j<4;j++){
+			// float opacity = valueNoise(rayPos*pow(2.0, float(j)));
+			float opacity = noiseOpacity(rayPos*pow(2.0, float(j)));
+			float absorbed = opacity * absorptionCoeff;
+			transparency *= 1.0 - absorbed;
+			color = mix(color, cloudColor, absorbed);
+		}
 		rayPos -= rayDir * stepSize;
 	}
 
 	// float op = noiseOpacity(eyePos.xyz);
 	// fragColor = vec4(op,op,op, 1);
+	// fragColor = vec4(color, 1);
 	fragColor = vec4(color, 1-transparency);
 }

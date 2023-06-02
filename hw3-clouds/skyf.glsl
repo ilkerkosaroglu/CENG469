@@ -16,5 +16,6 @@ void main(void)
 	dir.y = -dir.y;
 
 	fragColor = vec4(texture(skybox, dir).xyz, 1.0);
+	// fragColor = vec4(0,0,0, 1.0);
 
 }
