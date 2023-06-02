@@ -166,106 +166,106 @@ shared_ptr<RenderObject>& getRenderObject(const string& name){
 	throw "RenderObject not found";
 }
 
-class Armadillo: public RenderObject{
-	public:
-	Armadillo(){
-		program = &programs["arm"];
-		position = armCenter;
-	}
-	void calculateModelMatrix(){
-		glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (0. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
-		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-180. / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
-		glm::mat4 scale = glm::scale(glm::mat4(1.0), glm::vec3(5.0, 5.0, 5.0));
-		this->geometry.modelMatrix = scale * glm::translate(glm::mat4(1.0), this->position) * matRy * matRx;
-	}
-	void updateUniforms(){
-		RenderObject::updateUniforms();
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, ::textures["clay"].textureId);
-		glUniform1i(program->uniforms["matcap"], 0);
-	}
-};
+// class Armadillo: public RenderObject{
+// 	public:
+// 	Armadillo(){
+// 		program = &programs["arm"];
+// 		position = armCenter;
+// 	}
+// 	void calculateModelMatrix(){
+// 		glm::mat4 matRx = glm::rotate<float>(glm::mat4(1.0), (0. / 180.) * M_PI, glm::vec3(1.0, 0.0, 0.0));
+// 		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-180. / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
+// 		glm::mat4 scale = glm::scale(glm::mat4(1.0), glm::vec3(5.0, 5.0, 5.0));
+// 		this->geometry.modelMatrix = scale * glm::translate(glm::mat4(1.0), this->position) * matRy * matRx;
+// 	}
+// 	void updateUniforms(){
+// 		RenderObject::updateUniforms();
+// 		glActiveTexture(GL_TEXTURE0);
+// 		glBindTexture(GL_TEXTURE_2D, ::textures["clay"].textureId);
+// 		glUniform1i(program->uniforms["matcap"], 0);
+// 	}
+// };
 
-class TeslaBody: public RenderObject{
-	public:
-	TeslaBody(){
-		program = &programs["tesla"];
-		props["speed"] = 0.0;
-		props["angle"] = 180.0;
-		// position = objCenter;
-	}
-	void update(){
-		float speed = props["speed"];
-		float angle = props["angle"];
-		objCenter.x += speed * sin((-angle / 180.) * M_PI);
-		objCenter.z += speed * cos((-angle / 180.) * M_PI);
-		const float friction = 0.005;
-		if(speed>0){
-			props["speed"] -= friction;
-		}else{
-			props["speed"] += friction;
-		}
-		if(abs(speed) < 0.01){
-			props["speed"] = 0.0;
-		}
-		if(abs(speed) > 1.0){
-			props["speed"] = (abs(speed)/speed)*1.0;
-		}
-		position = objCenter;
-		eyePosActual = objCenter + eyePosDiff;
-	}
-	void calculateModelMatrix(){
-		float angle = props["angle"];
-		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-angle / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
-		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy;
-	}
-	void updateUniforms(){
-		RenderObject::updateUniforms();
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_CUBE_MAP, ::textures["envmap"].textureId);
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, ::textures["matcapblack"].textureId);
-		// glActiveTexture(GL_TEXTURE0);
-		glUniform1i(program->uniforms["skybox"], 0);
-		glUniform1i(program->uniforms["matcap"], 1);
-	}
-};
+// class TeslaBody: public RenderObject{
+// 	public:
+// 	TeslaBody(){
+// 		program = &programs["tesla"];
+// 		props["speed"] = 0.0;
+// 		props["angle"] = 180.0;
+// 		// position = objCenter;
+// 	}
+// 	void update(){
+// 		float speed = props["speed"];
+// 		float angle = props["angle"];
+// 		objCenter.x += speed * sin((-angle / 180.) * M_PI);
+// 		objCenter.z += speed * cos((-angle / 180.) * M_PI);
+// 		const float friction = 0.005;
+// 		if(speed>0){
+// 			props["speed"] -= friction;
+// 		}else{
+// 			props["speed"] += friction;
+// 		}
+// 		if(abs(speed) < 0.01){
+// 			props["speed"] = 0.0;
+// 		}
+// 		if(abs(speed) > 1.0){
+// 			props["speed"] = (abs(speed)/speed)*1.0;
+// 		}
+// 		position = objCenter;
+// 		eyePosActual = objCenter + eyePosDiff;
+// 	}
+// 	void calculateModelMatrix(){
+// 		float angle = props["angle"];
+// 		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-angle / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
+// 		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy;
+// 	}
+// 	void updateUniforms(){
+// 		RenderObject::updateUniforms();
+// 		glActiveTexture(GL_TEXTURE0);
+// 		glBindTexture(GL_TEXTURE_CUBE_MAP, ::textures["envmap"].textureId);
+// 		glActiveTexture(GL_TEXTURE1);
+// 		glBindTexture(GL_TEXTURE_2D, ::textures["matcapblack"].textureId);
+// 		// glActiveTexture(GL_TEXTURE0);
+// 		glUniform1i(program->uniforms["skybox"], 0);
+// 		glUniform1i(program->uniforms["matcap"], 1);
+// 	}
+// };
 
-class TeslaWheels: public RenderObject{
-	public:
-	TeslaWheels(){
-		program = &programs["wheels"];
-	}
-	void update(){
-		position = getRenderObject("TeslaBody")->position;
-	}
-	void calculateModelMatrix(){
-		float angle = getRenderObject("TeslaBody")->props["angle"];
-		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-angle / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
-		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy;
-	}
-};
+// class TeslaWheels: public RenderObject{
+// 	public:
+// 	TeslaWheels(){
+// 		program = &programs["wheels"];
+// 	}
+// 	void update(){
+// 		position = getRenderObject("TeslaBody")->position;
+// 	}
+// 	void calculateModelMatrix(){
+// 		float angle = getRenderObject("TeslaBody")->props["angle"];
+// 		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-angle / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
+// 		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy;
+// 	}
+// };
 
-class TeslaWindows: public RenderObject{
-	public:
-	TeslaWindows(){
-		program = &programs["windows"];
-	}
-	void update(){
-		position = getRenderObject("TeslaBody")->position;
-	}
-	void calculateModelMatrix(){
-		float angle = getRenderObject("TeslaBody")->props["angle"];
-		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-angle / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
-		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy;
-	}
-	void updateUniforms(){
-		RenderObject::updateUniforms();
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_CUBE_MAP, ::textures["envmap"].textureId);
-		glUniform1i(program->uniforms["skybox"], 0);
-	}
-};
+// class TeslaWindows: public RenderObject{
+// 	public:
+// 	TeslaWindows(){
+// 		program = &programs["windows"];
+// 	}
+// 	void update(){
+// 		position = getRenderObject("TeslaBody")->position;
+// 	}
+// 	void calculateModelMatrix(){
+// 		float angle = getRenderObject("TeslaBody")->props["angle"];
+// 		glm::mat4 matRy = glm::rotate<float>(glm::mat4(1.0), (-angle / 180.) * M_PI, glm::vec3(0.0, 1.0, 0.0));
+// 		this->geometry.modelMatrix = glm::translate(glm::mat4(1.0), this->position) * matRy;
+// 	}
+// 	void updateUniforms(){
+// 		RenderObject::updateUniforms();
+// 		glActiveTexture(GL_TEXTURE0);
+// 		glBindTexture(GL_TEXTURE_CUBE_MAP, ::textures["envmap"].textureId);
+// 		glUniform1i(program->uniforms["skybox"], 0);
+// 	}
+// };
 
 shared_ptr<RenderObject> ParseObj(const string &fileName, const string &name, shared_ptr<RenderObject> obj)
 {
@@ -482,10 +482,10 @@ Program& initShader(string name, string vert, string frag, vector<string> unifor
 void initShaders(){
 	initShader("skybox", "skyv.glsl", "skyf.glsl", {"skybox"});
 	initShader("clouds", "cloudv.glsl", "cloudf.glsl", {"eyePos"});
-	initShader("arm", "vert.glsl", "frag.glsl", {"matcap"});
-	initShader("tesla", "bodyv.glsl", "bodyf.glsl", {"matcap", "skybox"});
-	initShader("wheels", "wv.glsl", "wf.glsl", {});
-	initShader("windows", "windowv.glsl", "windowf.glsl", {"skybox"});
+	// initShader("arm", "vert.glsl", "frag.glsl", {"matcap"});
+	// initShader("tesla", "bodyv.glsl", "bodyf.glsl", {"matcap", "skybox"});
+	// initShader("wheels", "wv.glsl", "wf.glsl", {});
+	// initShader("windows", "windowv.glsl", "windowf.glsl", {"skybox"});
 }
 
 void Geometry::initVBO()
@@ -678,6 +678,31 @@ void initEnvMapTexture(){
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, d.textureId, 0);
 }
 
+// void initCloudFBO(){
+// 	textures["cloud"] = ImgTexture();
+// 	ImgTexture &t = textures["cloud"];
+
+// 	glGenTextures(1, &t.textureId);
+// 	glBindTexture(GL_TEXTURE_2D, t.textureId);
+
+// 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+// 	// glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+// 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, gWidth, gHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+// 	glGenFramebuffers(1, &fbo);
+// 	glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+// 	// attach a depth buffer texture to fix weird artifacts
+// 	textures["depthc"] = ImgTexture();
+// 	ImgTexture &d = textures["depthc"];
+// 	glGenTextures(1, &d.textureId);
+// 	glBindTexture(GL_TEXTURE_2D, d.textureId);
+// 	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, gWidth, gHeight, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, NULL);
+
+// 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, d.textureId, 0);
+// }
+
 void readSkybox(string path, string ext = "jpg"){
 	readImage((path + "right." + ext).c_str(), "right");
 	readImage((path + "left." + ext).c_str(), "left");
@@ -769,15 +794,15 @@ void init()
 {
 	initShaders();
 
-	readImage("hw2_support_files/gray.jpg", "matcapblack");
-	readImage("hw2_support_files/soft_clay.jpg", "clay");
+	// readImage("hw2_support_files/gray.jpg", "matcapblack");
+	// readImage("hw2_support_files/soft_clay.jpg", "clay");
 
-	initEnvMapTexture();
+	// initEnvMapTexture();
 
-	ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo", make_unique<Armadillo>());
-	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_body.obj", "TeslaBody", make_unique<TeslaBody>());
-	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_tires.obj", "TeslaWheels", make_unique<TeslaWheels>());
-	ParseObj("hw2_support_files/obj/cybertruck/cybertruck_windows.obj", "TeslaWindows", make_unique<TeslaWindows>());
+	// ParseObj("hw2_support_files/obj/armadillo.obj", "armadillo", make_unique<Armadillo>());
+	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_body.obj", "TeslaBody", make_unique<TeslaBody>());
+	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_tires.obj", "TeslaWheels", make_unique<TeslaWheels>());
+	// ParseObj("hw2_support_files/obj/cybertruck/cybertruck_windows.obj", "TeslaWindows", make_unique<TeslaWindows>());
 	//ParseObj("bunny.obj");
 	// genRandomImage(300, 300);
 
@@ -787,6 +812,8 @@ void init()
 	}
 
 	skybox.init();
+	cout << "ok" << endl;
+
 	cloud.init();
 }
 /*** ----------------------------------------- */
@@ -874,8 +901,9 @@ void display(){
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	glEnable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
+
 	// draw envmap centering the car (objCenter)
-	drawEnvMap();
+	// drawEnvMap();
 
 	skybox.draw();
 
@@ -947,10 +975,6 @@ void calcInteractions(){
 	{
 		getRenderObject("TeslaBody")->props["angle"] += 2.0;
 	}
-	float angle = getRenderObject("TeslaBody")->props["angle"];
-	eyeRotX += 180 - angle;
-	setViewingMatrix();
-	eyeRotX -= 180 - angle;
 }
 
 void mainLoop(GLFWwindow* window)
@@ -1049,7 +1073,7 @@ void mouseMove(GLFWwindow* window, double xpos, double ypos)
 
 	eyeRotX += -deltaX*mult;
 	eyeRotY += -deltaY*mult;
-	// setViewingMatrix();
+	setViewingMatrix();
 }
 
 void mouseButton(GLFWwindow* window, int button, int action, int mods)
@@ -1113,7 +1137,7 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 	// vsync
 	glfwSwapInterval(1);
 
-	int width = 1280, height = 720;
+	int width = 800, height = 600;
 	window = glfwCreateWindow(width, height, "Simple Example", NULL, NULL);
 
 	if (!window)
@@ -1141,6 +1165,7 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 	glDebugMessageCallback(debugCallback, NULL);
 
 	init();
+	cout<<"ok"<<endl;
 
 	glfwSetKeyCallback(window, keyboard);
 	glfwSetMouseButtonCallback(window, mouseButton);
