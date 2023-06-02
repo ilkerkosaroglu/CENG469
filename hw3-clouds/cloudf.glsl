@@ -20,7 +20,8 @@ float cloudEnd = 100.0;
 
 float absorptionCoeff = stepSize * 0.3;
 
-vec3 sunPos = vec3(0.0, 100.0, 0.0);
+vec3 sunPos = vec3(0.0, 300.0, 0.0);
+vec3 sunColor = vec3(1.0, 1.0, 1.0);
 
 vec3 gradients[16] = {
 	(vec3(1, 1, 0)),
@@ -161,34 +162,33 @@ void main(void)
 			hitOnce = true;
 			vec3 sunDist = rayPos - sunPos.xyz;
 			vec3 sunDir = normalize(sunDist);
-			vec3 sunStepSize = sunDist / 100.0;
+			int mx = 300;
+			float sunStepSize = 1.0;
 			vec3 curPos = sunPos;
 
-			float opacity = 0.0;
-			// float mult = 1.0;
-			for(int j=0;j<3;j++){
-				// for(int j=0;j<100;j++){
-				// 	vec3 curpos = crPos + sunDir * sunStepSize * float(j);
-				// 	float opacity = noiseOpacity(rayPos*pow(2.0, float(j)));
+			float lightAbsorbed = 0.0;
+			for(int k=0;k<mx;k++){
+				curPos = curPos + sunDir * sunStepSize * float(k);
+				if(curPos.y < cloudStart || curPos.y > cloudEnd)continue;
+				// for(int j=0;j<3;j++){
+					vec3 curLightPos = curPos/cloudSize;
+					lightAbsorbed += valueNoise(curLightPos);
 				// }
-				vec3 noisePos = rayPos*pow(2.0, float(j))/cloudSize;
-				opacity += (pow(4.0, -float(j))*valueNoise(noisePos))/maxOpacity;
-				// opacity += (pow(4.0, -float(j))*noiseOpacity(noisePos))/maxOpacity;
-				// if(rayPos.y < cloudStart-3 || rayPos.y > cloudEnd+3){
-				// 	continue;
-				// }
-				// if(rayPos.y < cloudStart || rayPos.y > cloudEnd){
-				// 	mult = 0.01;
-				// }
-				// opacity += (mult*pow(4.0, -float(j))*noiseOpacity(rayPos*pow(2.0, float(j))))/maxOpacity;
 			}
+			float opacity = 0.0;
+			for(int j=0;j<3;j++){
+				vec3 noisePos = (rayPos*pow(2.0, float(j)))/cloudSize;
+				opacity += (pow(4.0, -float(j))*valueNoise(noisePos))/maxOpacity;
+			}
+			
+			vec3 lightColor = sunColor * (1.0 - lightAbsorbed);
 			float absorbed = opacity * absorptionCoeff;
 			transparency *= 1.0 - absorbed;
 			
 			// if(rayPos.y+3.0 > cloudEnd){
 			// 	denseColor = cloudColor;
 			// }
-			color = mix(color, cloudColor, absorbed);
+			color = mix(color, lightColor, absorbed);
 			// color = mix(color, mix(cloudColor, denseColor, opacity*3), absorbed);
 		
 		rayPos -= rayDir * stepSize;

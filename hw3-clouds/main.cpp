@@ -1113,7 +1113,7 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 	// vsync
 	glfwSwapInterval(1);
 
-	int width = 1280, height = 720;
+	int width = 400, height = 300;
 	window = glfwCreateWindow(width, height, "Simple Example", NULL, NULL);
 
 	if (!window)
