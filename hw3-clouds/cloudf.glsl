@@ -7,7 +7,7 @@ in vec3 dir;
 out vec4 fragColor;
 
 const float stepSize = 1.0;
-const int maxSteps = 300;
+const int maxSteps = 220;
 const float far = 100;
 
 const vec3 skyColor = vec3(0.2, 0.4, 0.69);
@@ -19,7 +19,7 @@ const float cloudGaps = 80;
 const float cloudStart = 50.0;
 const float cloudEnd = 100.0;
 
-const float absorptionCoeff = stepSize * 0.3;
+const float absorptionCoeff = stepSize * 0.5;
 
 vec3 gradients[16] = {
 	(vec3(1, 1, 0)),
@@ -96,8 +96,7 @@ void main(void)
 		maxOpacity += pows4[j];
 	}
 
-	// rayPos += rayDir * stepSize * maxSteps;
-	//hit ray to cloud limit
+	// hit ray to cloud limit first as an optimization
 	if(eyePos.y < cloudStart){
 		float t = (cloudStart - eyePos.y)/rayDir.y;
 		if(t<0)discard;
@@ -117,32 +116,28 @@ void main(void)
 		rayPos += rayDir * t;
 		// if(length(rayPos- eyePos) > maxSteps)discard;
 	}
-	// calculate only 100 units of ray
+	// calculate only maxSteps*stepSize units of ray
 	rayPos += rayDir * stepSize * maxSteps;
 
-	// int hitCount = 0;
 	for(int i = 0; i < maxSteps; i++){
-			if(rayPos.y < cloudStart || rayPos.y > cloudEnd){
-				rayPos -= rayDir * stepSize;
-				continue;
-			}
+		if(rayPos.y < cloudStart || rayPos.y > cloudEnd){
+			rayPos -= rayDir * stepSize;
+			continue;
+		}
 
-			float opacity = 0.0;
-			for(int j=0;j<3;j++){
-				vec3 noisePos = rayPos*pows2[j]/cloudSize;
-				opacity += (pows4[j]*noiseOpacity(noisePos))/maxOpacity;
-			}
+		float opacity = 0.0;
+		for(int j=0;j<3;j++){
+			vec3 noisePos = rayPos*pows2[j]/cloudSize;
+			opacity += (pows4[j]*noiseOpacity(noisePos))/maxOpacity;
+		}
 
-			float absorbed = opacity * absorptionCoeff;
-			transparency *= 1.0 - absorbed;
-			
-			color = mix(color, mix(cloudColor, denseColor, opacity), absorbed);
+		float absorbed = opacity * absorptionCoeff;
+		transparency *= 1.0 - absorbed;
+		
+		color = mix(color, mix(cloudColor, denseColor, opacity), absorbed);
 		
 		rayPos -= rayDir * stepSize;
 	}
 
-	// float op = noiseOpacity(eyePos.xyz);
-	// fragColor = vec4(op,op,op, 1);
-	// fragColor = vec4(color, 1);
 	fragColor = vec4(color, 1-transparency);
 }

@@ -53,8 +53,9 @@ float eyeRotYInitial = (acos(dot(normalize(d), normalize(prllGround)))*180.0)/M_
 glm::vec3 armCenter = glm::vec3(-0.1f, 1.06f, -7.0f);
 
 float speed = 0;
+bool cloudsOn = true;
 
-glm::quat orientation(0, 0, 0, 1);
+glm::quat orientation = glm::quat(1, 0, 0, 0);
 
 struct Vertex
 {
@@ -915,11 +916,13 @@ void display(){
 		o->drawModel();
 	}
 
-	// assume clouds are not obstructed by other objects, hence no depth test
-	glDisable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	cloud.draw();
+	if(cloudsOn){
+		// assume clouds are not obstructed by other objects, hence no depth test
+		glDisable(GL_DEPTH_TEST);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		cloud.draw();
+	}
 }
 
 map<int, bool> pressed;
@@ -939,6 +942,9 @@ void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods){
 
 	if(action == GLFW_PRESS){
 		pressed[key] = true;
+		if(key==GLFW_KEY_T){
+			cloudsOn = !cloudsOn;
+		}
 	}
 	if(action == GLFW_RELEASE){
 		pressed[key] = false;
@@ -1002,10 +1008,6 @@ void calcInteractions(){
 		// PLANE CONTROLS - INVERTED
 		turnR = 0.02;
 		turnAxle = glm::rotate(orientation, right);
-	}
-	if (shouldDoAction(GLFW_KEY_T))
-	{
-		cout<<"toggle clouds"<<endl;
 	}
 
 	// do the rotation
@@ -1176,7 +1178,6 @@ int main(int argc, char** argv)   // Create Main Function For Bringing It All To
 	}
 
 	glfwMakeContextCurrent(window);
-	glfwSwapInterval(1);
 
 	// Initialize GLEW to setup the OpenGL Function pointers
 	if (GLEW_OK != glewInit())
